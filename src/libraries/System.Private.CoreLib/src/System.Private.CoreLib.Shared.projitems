@@ -210,6 +210,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)System\Collections\Generic\RandomizedStringEqualityComparer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Collections\Generic\ReferenceEqualityComparer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Collections\Generic\NonRandomizedStringEqualityComparer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\Collections\Generic\SwissTable.FallbackGroup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\Collections\Generic\SwissTable.IBitMask.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\Collections\Generic\SwissTable.IGroup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\Collections\Generic\SwissTable.Sse2Group.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\Collections\Generic\SwissTableHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Collections\Generic\ValueListBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Collections\HashHelpers.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Collections\HashHelpers.SerializationInfoTable.cs" />
