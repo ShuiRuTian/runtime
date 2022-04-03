@@ -93,7 +93,19 @@ namespace System.Collections.Generic
 
     internal struct FallbackGroup : IGroup
     {
+        [Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2207:Initialize value type static fields inline", Justification = "The doc says not to suppress this, but how to fix?")]
+        static unsafe FallbackGroup()
+        {
+            var res = new byte[sizeof(nuint)];
+            Array.Fill(res, SwissTableHelper.EMPTY);
+            _static_empty = res;
+        }
+
         public unsafe readonly int WIDTH => sizeof(nuint);
+
+        private static readonly byte[] _static_empty;
+
+        public readonly byte[] static_empty => _static_empty;
 
         private nuint repeat(byte b)
         {
@@ -111,13 +123,6 @@ namespace System.Collections.Generic
         internal FallbackGroup(nuint data)
         {
             _data = data;
-        }
-
-        public byte[] static_empty()
-        {
-            var res = new byte[WIDTH];
-            Array.Fill(res, SwissTableHelper.EMPTY);
-            return res;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

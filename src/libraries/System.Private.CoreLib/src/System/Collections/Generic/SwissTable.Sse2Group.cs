@@ -83,8 +83,17 @@ namespace System.Collections.Generic
         }
     }
 
+    // TODO: suppress default initialization.
     internal struct Sse2Group : IGroup
     {
+        [Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2207:Initialize value type static fields inline", Justification = "The doc says not to suppress this, but how to fix?")]
+        static Sse2Group()
+        {
+            var res = new byte[128 / 8];
+            Array.Fill(res, SwissTableHelper.EMPTY);
+            _static_empty = res;
+        }
+
         // 128 bits(_data length) / 8 (byte bits) = 16 bytes
         public readonly int WIDTH => 128 / 8;
 
@@ -94,13 +103,9 @@ namespace System.Collections.Generic
         {
             _data = data;
         }
+        private static readonly byte[] _static_empty;
 
-        public byte[] static_empty()
-        {
-            var res = new byte[WIDTH];
-            Array.Fill(res, SwissTableHelper.EMPTY);
-            return res;
-        }
+        public readonly byte[] static_empty => _static_empty;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe IGroup load(byte* ptr)

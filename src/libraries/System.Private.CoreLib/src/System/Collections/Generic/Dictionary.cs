@@ -25,11 +25,15 @@ namespace System.Collections.Generic
         // capacity = count + grow_left
         // entries.Length = capacity + tombstone + left_by_load_factor
 
-        // this contains all meaningfull data but _version
+        // this contains all meaningfull data but _version and _comparer
+        // Why comparer is not in inner table:
+        // When resize(which is more common), we always need to allocate everything but comparer.
+        // Only when construct from another collection, user could assign a new comparer, we decide to treat this situation as a edge case.
         private struct RawTableInner
         {
             internal int _bucket_mask;
             // TODO: If we could make _controls memory aligned(explicit memory layout or _dummy variable?), we could use load_align rather than load to speed up
+            // TODO: maybe _controls could be Span and allocate memory from unmanaged memory?
             internal byte[] _controls;
             internal Entry[]? _entries;
             // Number of elements that can be inserted before we need to grow the table
@@ -38,7 +42,6 @@ namespace System.Collections.Generic
             // number of real values stored in the map
             // `items` in rust
             internal int _count;
-            internal IEqualityComparer<TKey>? _comparer;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal void set_ctrl_h2(int index, int hash)
@@ -80,43 +83,43 @@ namespace System.Collections.Generic
             {
                 var probe_seq = new ProbeSeq(hash, _bucket_mask);
                 IGroup group;
-                while (true)
+                fixed (byte* ptr = &_controls[0])
                 {
-                    // TODO: maybe we should lock even fix the whole loop.
-                    // I am not sure which would be faster.
-                    fixed (byte* ptr = &_controls[probe_seq.pos])
+                    while (true)
                     {
-                        group = _group.load(ptr);
-                    }
-                    var bit = group.match_empty_or_deleted().lowest_set_bit();
-                    if (bit.HasValue)
-                    {
-                        var result = (probe_seq.pos + bit.Value) & _bucket_mask;
-
-                        // In tables smaller than the group width, trailing control
-                        // bytes outside the range of the table are filled with
-                        // EMPTY entries. These will unfortunately trigger a
-                        // match, but once masked may point to a full bucket that
-                        // is already occupied. We detect this situation here and
-                        // perform a second scan starting at the begining of the
-                        // table. This second scan is guaranteed to find an empty
-                        // slot (due to the load factor) before hitting the trailing
-                        // control bytes (containing EMPTY).
-                        if (is_full(_controls[result]))
+                        // TODO: maybe we should lock even fix the whole loop.
+                        // I am not sure which would be faster.
+                        group = _group.load(ptr + probe_seq.pos);
+                        var bit = group.match_empty_or_deleted().lowest_set_bit();
+                        if (bit.HasValue)
                         {
-                            Debug.Assert(_bucket_mask < _group.WIDTH);
-                            Debug.Assert(probe_seq.pos != 0);
-                            // TODO: Is this safe?
-                            fixed (byte* ptr2 = &_controls[0])
+                            var result = (probe_seq.pos + bit.Value) & _bucket_mask;
+
+                            // In tables smaller than the group width, trailing control
+                            // bytes outside the range of the table are filled with
+                            // EMPTY entries. These will unfortunately trigger a
+                            // match, but once masked may point to a full bucket that
+                            // is already occupied. We detect this situation here and
+                            // perform a second scan starting at the begining of the
+                            // table. This second scan is guaranteed to find an empty
+                            // slot (due to the load factor) before hitting the trailing
+                            // control bytes (containing EMPTY).
+                            if (is_full(_controls[result]))
                             {
-                                return _group.load(ptr2)
-                                    .match_empty_or_deleted()
-                                    .lowest_set_bit_nonzero();
+                                Debug.Assert(_bucket_mask < _group.WIDTH);
+                                Debug.Assert(probe_seq.pos != 0);
+                                // TODO: Is this safe?
+                                fixed (byte* ptr2 = &_controls[0])
+                                {
+                                    return _group.load(ptr2)
+                                        .match_empty_or_deleted()
+                                        .lowest_set_bit_nonzero();
+                                }
                             }
+                            return result;
                         }
-                        return result;
+                        probe_seq.move_next();
                     }
-                    probe_seq.move_next(_bucket_mask);
                 }
             }
 
@@ -128,6 +131,8 @@ namespace System.Collections.Generic
                 _count += 1;
             }
         }
+
+        private IEqualityComparer<TKey>? _comparer;
 
         // each add/expand/shrink will add one version, note that remove does not add version
         // For Enumerator, if version is changed, one error will be thrown for enumerator should not changed.
@@ -155,16 +160,16 @@ namespace System.Collections.Generic
 
         public Dictionary(int capacity, IEqualityComparer<TKey>? comparer)
         {
-            if (capacity < 0)
-            {
-                ThrowHelper.ThrowArgumentOutOfRangeException(ExceptionArgument.capacity);
-            }
+            InitializeInnerTable(capacity);
 
-            Initialize(capacity);
+            InitializeComparer(comparer);
+        }
 
+        public void InitializeComparer(IEqualityComparer<TKey>? comparer)
+        {
             if (comparer is not null && comparer != EqualityComparer<TKey>.Default) // first check for null to avoid forcing default comparer instantiation unnecessarily
             {
-                this.rawTable._comparer = comparer;
+                this._comparer = comparer;
             }
 
             // Special-case EqualityComparer<string>.Default, StringComparer.Ordinal, and StringComparer.OrdinalIgnoreCase.
@@ -172,21 +177,22 @@ namespace System.Collections.Generic
             // hash buckets become unbalanced.
             if (typeof(TKey) == typeof(string))
             {
-                IEqualityComparer<string>? stringComparer = NonRandomizedStringEqualityComparer.GetStringComparer(this.rawTable._comparer);
+                IEqualityComparer<string>? stringComparer = NonRandomizedStringEqualityComparer.GetStringComparer(this._comparer);
                 if (stringComparer is not null)
                 {
-                    this.rawTable._comparer = (IEqualityComparer<TKey>?)stringComparer;
+                    this._comparer = (IEqualityComparer<TKey>?)stringComparer;
                 }
             }
         }
 
         public Dictionary(IDictionary<TKey, TValue> dictionary) : this(dictionary, null) { }
 
-        public Dictionary(IDictionary<TKey, TValue> dictionary, IEqualityComparer<TKey>? comparer) :
-            this(dictionary != null ? dictionary.Count : 0, comparer)
+        public Dictionary(IDictionary<TKey, TValue> dictionary, IEqualityComparer<TKey>? comparer)
         {
+            InitializeComparer(comparer);
             if (dictionary == null)
             {
+                InitializeInnerTable(0);
                 ThrowHelper.ThrowArgumentNullException(ExceptionArgument.dictionary);
             }
 
@@ -195,11 +201,12 @@ namespace System.Collections.Generic
 
         public Dictionary(IEnumerable<KeyValuePair<TKey, TValue>> collection) : this(collection, null) { }
 
-        public Dictionary(IEnumerable<KeyValuePair<TKey, TValue>> collection, IEqualityComparer<TKey>? comparer) :
-            this((collection as ICollection<KeyValuePair<TKey, TValue>>)?.Count ?? 0, comparer)
+        public Dictionary(IEnumerable<KeyValuePair<TKey, TValue>> collection, IEqualityComparer<TKey>? comparer)
         {
+            InitializeComparer(comparer);
             if (collection == null)
             {
+                InitializeInnerTable(0);
                 ThrowHelper.ThrowArgumentNullException(ExceptionArgument.collection);
             }
 
@@ -218,20 +225,21 @@ namespace System.Collections.Generic
         {
             get
             {
-                // TODO: uncomment
-                // if (typeof(TKey) == typeof(string))
-                // {
-                //     return (IEqualityComparer<TKey>)IInternalStringEqualityComparer.GetUnderlyingEqualityComparer((IEqualityComparer<string?>?)_comparer);
-                // }
-                // else
-                // {
-                return rawTable._comparer ?? EqualityComparer<TKey>.Default;
-                // }
+                if (typeof(TKey) == typeof(string))
+                {
+                    return (IEqualityComparer<TKey>)IInternalStringEqualityComparer.GetUnderlyingEqualityComparer((IEqualityComparer<string?>?)_comparer);
+                }
+                else
+                {
+                    return _comparer ?? EqualityComparer<TKey>.Default;
+                }
             }
         }
 
         private void CloneFromCollection(IEnumerable<KeyValuePair<TKey, TValue>> collection)
         {
+            // Initialize could be specified for Dicitonary, defer initialize
+
             // It is likely that the passed-in dictionary is Dictionary<TKey,TValue>. When this is the case,
             // avoid the enumerator allocation and overhead by looping through the entries array directly.
             // We only do this when dictionary is Dictionary<TKey,TValue> and not a subclass, to maintain
@@ -239,11 +247,11 @@ namespace System.Collections.Generic
             if (collection.GetType() == typeof(Dictionary<TKey, TValue>))
             {
                 Dictionary<TKey, TValue> source = (Dictionary<TKey, TValue>)collection;
-
                 CloneFromDictionary(source);
                 return;
             }
 
+            InitializeInnerTable((collection as ICollection<KeyValuePair<TKey, TValue>>)?.Count ?? 0);
             // Fallback path for IEnumerable that isn't a non-subclassed Dictionary<TKey,TValue>.
             foreach (KeyValuePair<TKey, TValue> pair in collection)
             {
@@ -255,24 +263,39 @@ namespace System.Collections.Generic
         {
             if (source.Count == 0)
             {
-                // Nothing to copy, all done
+                // TODO: maybe just InitializeInnerTable(0)? could CLR optimsie this?
+                this.rawTable = NewEmptyInnerTable();
                 return;
             }
-            // This is not currently a true .AddRange as it needs to be an initalized dictionary
-            // of the correct size, and also an empty dictionary with no current entities (and no argument checks).
 
-            if (this.rawTable._comparer == source.rawTable._comparer)
-            {
-                CloneNonEmptyRawTable(in source.rawTable, ref this.rawTable);
-                return;
-            }
-            Debug.Assert(source.rawTable._entries != null);
+            var oldEntries = source.rawTable._entries;
             byte[] oldCtrls = source.rawTable._controls;
-            Entry[] oldEntries = source.rawTable._entries;
 
+            Debug.Assert(oldEntries != null);
+
+            this.rawTable = NewInnerTableWithControlUninitialized(source._buckets);
+
+            if (this._comparer == source._comparer)
+            {
+                // here is why we initial non-empty innter-table with uninitialized array.
+                Array.Copy(source.rawTable._controls, this.rawTable._controls, oldCtrls.Length);
+                Debug.Assert(this.rawTable._entries != null);
+                var newEntries = this.rawTable._entries;
+                for (int i = 0; i < oldEntries.Length; i++)
+                {
+                    if (is_full(this.rawTable._controls[i]))
+                    {
+                        newEntries[i] = oldEntries[i];
+                    }
+                }
+                this.rawTable._growth_left = source.rawTable._count;
+                this.rawTable._count = source.rawTable._count;
+                return;
+            }
+
+            Array.Fill(this.rawTable._controls, EMPTY);
             // TODO: Maybe we could use IBITMASK to accllerate
-            int length = source.rawTable._entries.Length;
-            for (int i = 0; i < length; i++)
+            for (int i = 0; i < oldEntries.Length; i++)
             {
                 if (is_full(oldCtrls[i]))
                 {
@@ -281,7 +304,6 @@ namespace System.Collections.Generic
             }
             return;
         }
-
 
         public void Add(TKey key, TValue value)
         {
@@ -437,11 +459,35 @@ namespace System.Collections.Generic
         }
 
         // This method not check whether array and index, maybe the name should be CopyToUnsafe?
-        private void CopyToWorker(KeyValuePair<TKey, TValue>[] array, int index)
+        private unsafe void CopyToWorker(KeyValuePair<TKey, TValue>[] array, int index)
         {
-            foreach (var item in this)
+            // is equivalent to iterator in functionality,
+            // "inline" to avoid the cost
+
+            // TODO: maybe we could fix the array then it might be safe to use load_align
+            int offset = 0;
+
+            fixed (byte* ptr = &this.rawTable._controls[0])
             {
-                array[index++] = new KeyValuePair<TKey, TValue>(item.Key, item.Value);
+                IBitMask bitMask = _group.load(ptr).match_full();
+                while (true)
+                {
+                    var lowest_set_bit = bitMask.lowest_set_bit();
+                    if (lowest_set_bit.HasValue)
+                    {
+                        Debug.Assert(this.rawTable._entries != null);
+                        bitMask = bitMask.remove_lowest_bit();
+                        ref var entry = ref this.rawTable._entries[offset + lowest_set_bit.Value];
+                        array[index++] = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
+                        continue;
+                    }
+                    offset += _group.WIDTH;
+                    if (offset >= this._buckets)
+                    {
+                        break;
+                    }
+                    bitMask = _group.load(ptr + offset).match_full();
+                }
             }
         }
 
@@ -703,8 +749,8 @@ namespace System.Collections.Generic
 
             int realVersion = siInfo.GetInt32(VersionName);
             int hashsize = siInfo.GetInt32(HashSizeName);
-            rawTable._comparer = (IEqualityComparer<TKey>)siInfo.GetValue(ComparerName, typeof(IEqualityComparer<TKey>))!; // When serialized if comparer is null, we use the default.
-            Initialize(hashsize);
+            _comparer = (IEqualityComparer<TKey>)siInfo.GetValue(ComparerName, typeof(IEqualityComparer<TKey>))!; // When serialized if comparer is null, we use the default.
+            InitializeInnerTable(hashsize);
 
             if (hashsize != 0)
             {
@@ -736,7 +782,7 @@ namespace System.Collections.Generic
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetHashCodeOfKey(TKey key)
         {
-            return (this.rawTable._comparer == null) ? key.GetHashCode() : this.rawTable._comparer.GetHashCode(key);
+            return (this._comparer == null) ? key.GetHashCode() : this._comparer.GetHashCode(key);
         }
 
         /// <summary>
@@ -778,7 +824,7 @@ namespace System.Collections.Generic
             var old_ctrl = rawTable._controls[index];
             if (this.rawTable._growth_left == 0 && special_is_empty(old_ctrl))
             {
-                this.EnsureCapacity(this.rawTable._count + 1);
+                this.EnsureCapacityWorker(this.rawTable._count + 1);
                 index = this.rawTable.find_insert_slot(hashCode);
             }
             Debug.Assert(rawTable._entries != null);
@@ -794,7 +840,7 @@ namespace System.Collections.Generic
         /// These methods are relatively niche and only used in specific scenarios, so adding them in a separate type avoids
         /// the additional overhead on each <see cref="Dictionary{TKey, TValue}"/> instantiation, especially in AOT scenarios.
         /// </summary>
-        public static class CollectionsMarshalHelper
+        internal static class CollectionsMarshalHelper
         {
             /// <inheritdoc cref="Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault{TKey, TValue}(Dictionary{TKey, TValue}, TKey, out bool)"/>
             public static ref TValue? GetValueRefOrAddDefault(Dictionary<TKey, TValue> dictionary, TKey key, out bool exists)
@@ -818,7 +864,7 @@ namespace System.Collections.Generic
                 var old_ctrl = dictionary.rawTable._controls[index];
                 if (dictionary.rawTable._growth_left == 0 && special_is_empty(old_ctrl))
                 {
-                    dictionary.EnsureCapacity(dictionary.rawTable._count + 1);
+                    dictionary.EnsureCapacityWorker(dictionary.rawTable._count + 1);
                     index = dictionary.rawTable.find_insert_slot(hashCode);
                 }
                 Debug.Assert(dictionary.rawTable._entries != null);
@@ -841,64 +887,52 @@ namespace System.Collections.Generic
         // Note that the _entries might still not allocated
         // this means we do not want to use any existing data, including resize or use dictionary initialize
         // `realisticCapacity` is any positive number
-        private void Initialize(int realisticCapacity)
+        private void InitializeInnerTable(int realisticCapacity)
         {
-            RawTableInner innerTable;
+            if (realisticCapacity < 0)
+            {
+                ThrowHelper.ThrowArgumentOutOfRangeException(ExceptionArgument.capacity);
+            }
+
             if (realisticCapacity == 0)
             {
-                innerTable = newEmptyDictionary();
-                // copy everything but comparer.
-                this.rawTable._bucket_mask = innerTable._bucket_mask;
-                this.rawTable._controls = innerTable._controls;
-                this.rawTable._entries = innerTable._entries;
-                this.rawTable._count = innerTable._count;
-                this.rawTable._growth_left = innerTable._growth_left;
+                this.rawTable = NewEmptyInnerTable();
                 return;
             }
             var idealCapacity = capacity_to_buckets(realisticCapacity);
-            innerTable = newNormalDictionary(idealCapacity);
-            this.rawTable._bucket_mask = innerTable._bucket_mask;
-            this.rawTable._controls = innerTable._controls;
-            this.rawTable._entries = innerTable._entries;
-            this.rawTable._count = innerTable._count;
-            this.rawTable._growth_left = innerTable._growth_left;
+            this.rawTable = NewInnerTableWithControlUninitialized(idealCapacity);
+            Array.Fill(this.rawTable._controls, EMPTY);
         }
 
         // TODO: check whether we need NonRandomizedStringEqualityComparer
         // If we need rehash, we should learn from rust.
         // resize to 0 capaciry is a special simple case, Which is not handled here.
-        private void Resize(int realisticCapacity)
+        private void Grow(int realisticCapacity)
         {
             Debug.Assert(this.rawTable._entries != null);
             var idealCapacity = capacity_to_buckets(realisticCapacity);
-            ResizeWorker(idealCapacity);
+            GrowWorker(idealCapacity);
         }
 
-        private void ResizeWorker(int idealEntryLength)
+        private void GrowWorker(int idealEntryLength)
         {
             Debug.Assert(idealEntryLength >= rawTable._count);
-            var newTable = newNormalDictionary(idealEntryLength);
-            Debug.Assert(newTable._entries != null);
-            CloneNonEmptyRawTable(in this.rawTable, ref newTable);
-            this.rawTable = newTable;
-        }
 
-        // Clone data from source to dest, it is not a simple copy, for thumbstone, we only add `full` value
-        private void CloneNonEmptyRawTable(in RawTableInner sourceRawTable, ref RawTableInner newRawTable)
-        {
-            // Note that the we only use this.rawTable.comparer now
-            Debug.Assert(sourceRawTable._entries != null);
-            Debug.Assert(newRawTable._entries != null);
-            Debug.Assert(newRawTable._count == 0);
-            Debug.Assert(newRawTable._growth_left >= sourceRawTable._count);
+            var newTable = NewInnerTableWithControlUninitialized(idealEntryLength);
+            Array.Fill(newTable._controls, EMPTY);
+
+            Debug.Assert(rawTable._entries != null);
+            Debug.Assert(newTable._entries != null);
+            Debug.Assert(newTable._count == 0);
+            Debug.Assert(newTable._growth_left >= rawTable._count);
 
             // We can use a simple version of insert() here since:
             // - there are no DELETED entries.
             // - we know there is the same enough space in the table.
-            byte[] oldCtrls = sourceRawTable._controls;
-            Entry[] oldEntries = sourceRawTable._entries;
-            Entry[] newEntries = newRawTable._entries;
-            int length = sourceRawTable._entries.Length;
+            byte[] oldCtrls = rawTable._controls;
+            Entry[] oldEntries = rawTable._entries;
+            Entry[] newEntries = newTable._entries;
+            int length = rawTable._entries.Length;
             // TODO: Maybe we could use IBITMASK to accllerate
             for (int i = 0; i < length; i++)
             {
@@ -906,25 +940,15 @@ namespace System.Collections.Generic
                 {
                     var key = oldEntries[i].Key;
                     var hash = GetHashCodeOfKey(key);
-                    var index = newRawTable.find_insert_slot(hash);
-                    newRawTable.set_ctrl_h2(index, hash);
+                    var index = newTable.find_insert_slot(hash);
+                    newTable.set_ctrl_h2(index, hash);
                     newEntries[index] = oldEntries[i];
                 }
             }
-            newRawTable._growth_left -= sourceRawTable._count;
-            newRawTable._count = sourceRawTable._count;
-            newRawTable._comparer = sourceRawTable._comparer;
-        }
+            newTable._growth_left -= rawTable._count;
+            newTable._count = rawTable._count;
 
-        private void CloneRawTableWithComparer(in RawTableInner sourceRawTable, ref RawTableInner newRawTable, IEqualityComparer<TKey> comparer)
-        {
-            Debug.Assert(sourceRawTable._entries is not null);
-            Debug.Assert(newRawTable._entries is not null);
-            Debug.Assert(newRawTable._entries.Length >= sourceRawTable._count);
-            Debug.Assert(newRawTable._count == 0);
-            var sourceCopy = sourceRawTable;
-            sourceCopy._comparer = comparer;
-            CloneNonEmptyRawTable(in sourceCopy, ref newRawTable);
+            this.rawTable = newTable;
         }
 
         /// <summary>
@@ -943,21 +967,24 @@ namespace System.Collections.Generic
                 return currentCapacity;
             }
 
-            _version++;
-
-            if (this.rawTable._entries == null)
-            {
-                this.Initialize(capacity);
-            }
-            else
-            {
-                this.Resize(capacity);
-            }
+            EnsureCapacityWorker(capacity);
 
             return this.rawTable._count + this.rawTable._growth_left;
         }
 
+        private void EnsureCapacityWorker(int capacity)
+        {
+            _version++;
 
+            if (this.rawTable._entries == null)
+            {
+                this.InitializeInnerTable(capacity);
+            }
+            else
+            {
+                this.Grow(capacity);
+            }
+        }
         /// <summary>
         /// Sets the capacity of this dictionary to what it would be if it had been originally initialized with all its entries
         /// </summary>
@@ -990,7 +1017,7 @@ namespace System.Collections.Generic
             {
                 _version++;
                 // TODO: No need to initialize if _entry is null.
-                this.Initialize(capacity);
+                this.InitializeInnerTable(capacity);
                 return;
             }
 
@@ -1000,7 +1027,7 @@ namespace System.Collections.Generic
             if (idealBuckets <= this._buckets)
             {
                 _version++;
-                this.ResizeWorker(idealBuckets);
+                this.GrowWorker(idealBuckets);
                 return;
             }
         }
@@ -1013,14 +1040,13 @@ namespace System.Collections.Generic
         /// leave the data pointer dangling since that bucket is never written to
         /// due to our load factor forcing us to always have at least 1 free bucket.
         /// </summary>
-        private static RawTableInner newEmptyDictionary()
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static RawTableInner NewEmptyInnerTable()
         {
-            // unlike rust, maybe we should convert this to a forever lived array that is allocated with specific value.
-            byte[] _controls = _group.static_empty();
             return new RawTableInner
             {
                 _bucket_mask = 0,
-                _controls = _controls,
+                _controls = _group.static_empty,
                 _entries = null,
                 _growth_left = 0,
                 _count = 0
@@ -1034,18 +1060,16 @@ namespace System.Collections.Generic
         /// </summary>
         // unlike rust, we never cares about out of memory
         // TODO: Maybe ref to improve performance?
-        private static RawTableInner newNormalDictionary(int buckets)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static RawTableInner NewInnerTableWithControlUninitialized(int buckets)
         {
             Debug.Assert(BitOperations.IsPow2(buckets));
-            byte[] _controls = new byte[buckets + _group.WIDTH];
-            Entry[] _entries = new Entry[buckets];
-            Array.Fill(_controls, EMPTY);
             return new RawTableInner
             {
                 _bucket_mask = buckets - 1,
-                _controls = _controls,
-                _entries = _entries,
-                _growth_left = Dictionary<TKey, TValue>.bucket_mask_to_capacity(buckets - 1),
+                _controls = new byte[buckets + _group.WIDTH],
+                _entries = new Entry[buckets],
+                _growth_left = bucket_mask_to_capacity(buckets - 1),
                 _count = 0
             };
         }
@@ -1053,7 +1077,7 @@ namespace System.Collections.Generic
         private bool IsKeyEqual(TKey key1, TKey key2)
         {
             // TODO: in Dictionary, this is a complex condition to improve performance, learn from it.
-            var comparer = rawTable._comparer ?? EqualityComparer<TKey>.Default;
+            var comparer = this._comparer ?? EqualityComparer<TKey>.Default;
             return comparer.Equals(key1, key2);
         }
 
@@ -1079,31 +1103,31 @@ namespace System.Collections.Generic
             var probe_seq = new ProbeSeq(hash, rawTable._bucket_mask);
             ref Entry entry = ref Unsafe.NullRef<Entry>();
             IGroup group;
-            while (true)
+            fixed (byte* ptr = &rawTable._controls[0])
             {
-                fixed (byte* ptr = &rawTable._controls[probe_seq.pos])
+                while (true)
                 {
-                    group = _group.load(ptr);
-                }
-                var bitmask = group.match_byte(h2_hash);
-                // TODO: Iterator and performance, if not influence, iterator would be clearer.
-                while (bitmask.any_bit_set())
-                {
-                    Debug.Assert(rawTable._entries != null);
-                    var bit = bitmask.lowest_set_bit()!.Value;
-                    bitmask = bitmask.remove_lowest_bit();
-                    var index = (probe_seq.pos + bit) & rawTable._bucket_mask;
-                    entry = ref rawTable._entries[index];
-                    if (IsKeyEqual(key, entry.Key))
+                    group = _group.load(ptr + probe_seq.pos);
+                    var bitmask = group.match_byte(h2_hash);
+                    // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                    while (bitmask.any_bit_set())
                     {
-                        return ref entry;
+                        Debug.Assert(rawTable._entries != null);
+                        var bit = bitmask.lowest_set_bit()!.Value;
+                        bitmask = bitmask.remove_lowest_bit();
+                        var index = (probe_seq.pos + bit) & rawTable._bucket_mask;
+                        entry = ref rawTable._entries[index];
+                        if (IsKeyEqual(key, entry.Key))
+                        {
+                            return ref entry;
+                        }
                     }
+                    if (group.match_empty().any_bit_set())
+                    {
+                        return ref Unsafe.NullRef<Entry>();
+                    }
+                    probe_seq.move_next();
                 }
-                if (group.match_empty().any_bit_set())
-                {
-                    return ref Unsafe.NullRef<Entry>();
-                }
-                probe_seq.move_next(rawTable._bucket_mask);
             }
         }
 
@@ -1121,31 +1145,31 @@ namespace System.Collections.Generic
             var probe_seq = new ProbeSeq(hash, rawTable._bucket_mask);
             ref Entry entry = ref Unsafe.NullRef<Entry>();
             IGroup group;
-            while (true)
+            fixed (byte* ptr = &rawTable._controls[0])
             {
-                fixed (byte* ptr = &rawTable._controls[probe_seq.pos])
+                while (true)
                 {
-                    group = _group.load(ptr);
-                }
-                var bitmask = group.match_byte(h2_hash);
-                // TODO: Iterator and performance, if not influence, iterator would be clearer.
-                while (bitmask.any_bit_set())
-                {
-                    // there must be set bit
-                    var bit = bitmask.lowest_set_bit()!.Value;
-                    bitmask = bitmask.remove_lowest_bit();
-                    var index = (probe_seq.pos + bit) & rawTable._bucket_mask;
-                    entry = ref rawTable._entries[index];
-                    if (IsKeyEqual(key, entry.Key))
+                    group = _group.load(ptr + probe_seq.pos);
+                    var bitmask = group.match_byte(h2_hash);
+                    // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                    while (bitmask.any_bit_set())
                     {
-                        return index;
+                        // there must be set bit
+                        var bit = bitmask.lowest_set_bit()!.Value;
+                        bitmask = bitmask.remove_lowest_bit();
+                        var index = (probe_seq.pos + bit) & rawTable._bucket_mask;
+                        entry = ref rawTable._entries[index];
+                        if (IsKeyEqual(key, entry.Key))
+                        {
+                            return index;
+                        }
                     }
+                    if (group.match_empty().any_bit_set())
+                    {
+                        return null;
+                    }
+                    probe_seq.move_next();
                 }
-                if (group.match_empty().any_bit_set())
-                {
-                    return null;
-                }
-                probe_seq.move_next(rawTable._bucket_mask);
             }
         }
 
@@ -1286,19 +1310,23 @@ namespace System.Collections.Generic
         internal struct ProbeSeq
         {
             internal int pos;
-            internal int stride;
+            private int _stride;
+            private readonly int _bucket_mask;
+
             internal ProbeSeq(int hash, int bucket_mask)
             {
+                this._bucket_mask = bucket_mask;
                 this.pos = h1(hash) & bucket_mask;
-                this.stride = 0;
+                this._stride = 0;
             }
-            internal void move_next(int bucket_mask)
+
+            internal void move_next()
             {
                 // We should have found an empty bucket by now and ended the probe.
-                Debug.Assert(this.stride <= bucket_mask, "Went past end of probe sequence");
-                unchecked { this.stride += _group.WIDTH; }
-                this.pos += this.stride;
-                this.pos &= bucket_mask;
+                Debug.Assert(this._stride <= _bucket_mask, "Went past end of probe sequence");
+                unchecked { this._stride += _group.WIDTH; }
+                this.pos += this._stride;
+                this.pos &= _bucket_mask;
             }
         }
 
@@ -1425,18 +1453,17 @@ namespace System.Collections.Generic
                         Debug.Assert(this._dictionary.rawTable._entries != null);
                         isValid = true;
                         this._currentBitMask = this._currentBitMask.remove_lowest_bit();
-                        var entry = this._dictionary.rawTable._entries[this.current_ctrl_offset + lowest_set_bit.Value];
+                        ref var entry = ref this._dictionary.rawTable._entries[this.current_ctrl_offset + lowest_set_bit.Value];
                         this._current = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
                         return true;
                     }
-                    if (this.current_ctrl_offset + _group.WIDTH >= this._dictionary._buckets)
+                    this.current_ctrl_offset += _group.WIDTH;
+                    if (this.current_ctrl_offset >= this._dictionary._buckets)
                     {
                         this._current = default;
                         isValid = false;
                         return false;
                     }
-
-                    this.current_ctrl_offset += _group.WIDTH;
                     this._currentBitMask = LoadBitMask();
                 }
             }
@@ -1639,17 +1666,17 @@ namespace System.Collections.Generic
                             Debug.Assert(this._dictionary.rawTable._entries != null);
                             isValid = true;
                             this._currentBitMask = this._currentBitMask.remove_lowest_bit();
-                            var entry = this._dictionary.rawTable._entries[this.current_ctrl_offset + lowest_set_bit.Value];
-                            this._current = entry.Key;
+                            this._current = this._dictionary.rawTable._entries[this.current_ctrl_offset + lowest_set_bit.Value].Key;
                             return true;
                         }
-                        if (this.current_ctrl_offset + _group.WIDTH >= this._dictionary._buckets)
+                        this.current_ctrl_offset += _group.WIDTH;
+                        if (this.current_ctrl_offset >= this._dictionary._buckets)
                         {
                             this._current = default;
                             isValid = false;
                             return false;
                         }
-                        this.current_ctrl_offset += _group.WIDTH;
+
                         this._currentBitMask = LoadBitMask();
                     }
                 }
@@ -1861,18 +1888,17 @@ namespace System.Collections.Generic
                             Debug.Assert(this._dictionary.rawTable._entries != null);
                             isValid = true;
                             this._currentBitMask = this._currentBitMask.remove_lowest_bit();
-                            var entry = this._dictionary.rawTable._entries[this.current_ctrl_offset + lowest_set_bit.Value];
-                            this._current = entry.Value;
+                            this._current = this._dictionary.rawTable._entries[this.current_ctrl_offset + lowest_set_bit.Value].Value;
                             return true;
                         }
-                        if (this.current_ctrl_offset + _group.WIDTH >= this._dictionary._buckets)
+                        this.current_ctrl_offset += _group.WIDTH;
+                        if (this.current_ctrl_offset >= this._dictionary._buckets)
                         {
                             this._current = default;
                             isValid = false;
                             return false;
                         }
 
-                        this.current_ctrl_offset += _group.WIDTH;
                         this._currentBitMask = LoadBitMask();
                     }
                 }

@@ -10,7 +10,7 @@ namespace System.Collections.Generic
         /// value for an empty hash table.
         /// </summary>
         /// <returns></returns>
-        abstract byte[] static_empty();
+        byte[] static_empty { get; }
 
         /// <summary>
         /// The bytes that the group data ocupies
