@@ -29,7 +29,7 @@ namespace System.Collections.Generic
         // Why comparer is not in inner table:
         // When resize(which is more common), we always need to allocate everything but comparer.
         // Only when construct from another collection, user could assign a new comparer, we decide to treat this situation as a edge case.
-        private struct RawTableInner
+        internal struct RawTableInner
         {
             internal int _bucket_mask;
             // TODO: If we could make _controls memory aligned(explicit memory layout or _dummy variable?), we could use load_align rather than load to speed up
@@ -72,55 +72,16 @@ namespace System.Collections.Generic
                 // ---------------------------------------------
                 // | [A] | [B] | [EMPTY] | [EMPTY] | [A] | [B] |
                 // ---------------------------------------------
-                var index2 = ((index - _group.WIDTH) & _bucket_mask) + _group.WIDTH;
+                var index2 = ((index - GROUP_WIDTH) & _bucket_mask) + GROUP_WIDTH;
                 _controls[index] = ctrl;
                 _controls[index2] = ctrl;
             }
 
             // always insert a new one
             // not check replace, caller should make sure
-            internal unsafe int find_insert_slot(int hash)
+            internal int find_insert_slot(int hash)
             {
-                var probe_seq = new ProbeSeq(hash, _bucket_mask);
-                IGroup group;
-                fixed (byte* ptr = &_controls[0])
-                {
-                    while (true)
-                    {
-                        // TODO: maybe we should lock even fix the whole loop.
-                        // I am not sure which would be faster.
-                        group = _group.load(ptr + probe_seq.pos);
-                        var bit = group.match_empty_or_deleted().lowest_set_bit();
-                        if (bit.HasValue)
-                        {
-                            var result = (probe_seq.pos + bit.Value) & _bucket_mask;
-
-                            // In tables smaller than the group width, trailing control
-                            // bytes outside the range of the table are filled with
-                            // EMPTY entries. These will unfortunately trigger a
-                            // match, but once masked may point to a full bucket that
-                            // is already occupied. We detect this situation here and
-                            // perform a second scan starting at the begining of the
-                            // table. This second scan is guaranteed to find an empty
-                            // slot (due to the load factor) before hitting the trailing
-                            // control bytes (containing EMPTY).
-                            if (is_full(_controls[result]))
-                            {
-                                Debug.Assert(_bucket_mask < _group.WIDTH);
-                                Debug.Assert(probe_seq.pos != 0);
-                                // TODO: Is this safe?
-                                fixed (byte* ptr2 = &_controls[0])
-                                {
-                                    return _group.load(ptr2)
-                                        .match_empty_or_deleted()
-                                        .lowest_set_bit_nonzero();
-                                }
-                            }
-                            return result;
-                        }
-                        probe_seq.move_next();
-                    }
-                }
+                return DispatchFindInsertSlot(hash, _controls);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -132,16 +93,16 @@ namespace System.Collections.Generic
             }
         }
 
-        private IEqualityComparer<TKey>? _comparer;
+        internal IEqualityComparer<TKey>? _comparer;
 
         // each add/expand/shrink will add one version, note that remove does not add version
         // For Enumerator, if version is changed, one error will be thrown for enumerator should not changed.
-        private int _version;
+        internal int _version;
 
         // enumerator will not throw an error if this changed. Instead, it will refresh data.
-        private int _tolerantVersion;
+        internal int _tolerantVersion;
 
-        private RawTableInner rawTable;
+        internal RawTableInner rawTable;
 
         public int Count => this.rawTable._count;
 
@@ -150,7 +111,7 @@ namespace System.Collections.Generic
         // This means the upper bound is not Int32.MaxValue(0x7FFFF_FFFF), but 0x4000_0000
         // TODO: Should we throw an expection if user try to grow again when it has been largest?
         // This is hard(impossible?) to be larger, for the length of array is limited to 0x7FFFF_FFFF
-        private int _buckets => this.rawTable._bucket_mask + 1;
+        internal int _buckets => this.rawTable._bucket_mask + 1;
 
         public Dictionary() : this(0, null) { }
 
@@ -461,34 +422,8 @@ namespace System.Collections.Generic
         // This method not check whether array and index, maybe the name should be CopyToUnsafe?
         private unsafe void CopyToWorker(KeyValuePair<TKey, TValue>[] array, int index)
         {
-            // is equivalent to iterator in functionality,
-            // "inline" to avoid the cost
-
             // TODO: maybe we could fix the array then it might be safe to use load_align
-            int offset = 0;
-
-            fixed (byte* ptr = &this.rawTable._controls[0])
-            {
-                IBitMask bitMask = _group.load(ptr).match_full();
-                while (true)
-                {
-                    var lowest_set_bit = bitMask.lowest_set_bit();
-                    if (lowest_set_bit.HasValue)
-                    {
-                        Debug.Assert(this.rawTable._entries != null);
-                        bitMask = bitMask.remove_lowest_bit();
-                        ref var entry = ref this.rawTable._entries[offset + lowest_set_bit.Value];
-                        array[index++] = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
-                        continue;
-                    }
-                    offset += _group.WIDTH;
-                    if (offset >= this._buckets)
-                    {
-                        break;
-                    }
-                    bitMask = _group.load(ptr + offset).match_full();
-                }
-            }
+            DispatchCopyToArrayFromDictionaryWorker(this, array, index);
         }
 
         #region IDictionary
@@ -877,10 +812,10 @@ namespace System.Collections.Generic
             }
         }
 
-        private struct Entry
+        internal struct Entry
         {
-            public TKey Key;
-            public TValue Value;
+            internal TKey Key;
+            internal TValue Value;
         }
 
         // allocate and initialize when with real capacity
@@ -1046,7 +981,7 @@ namespace System.Collections.Generic
             return new RawTableInner
             {
                 _bucket_mask = 0,
-                _controls = _group.static_empty,
+                _controls = DispatchGetEmptyControls(),
                 _entries = null,
                 _growth_left = 0,
                 _count = 0
@@ -1067,7 +1002,7 @@ namespace System.Collections.Generic
             return new RawTableInner
             {
                 _bucket_mask = buckets - 1,
-                _controls = new byte[buckets + _group.WIDTH],
+                _controls = new byte[buckets + GROUP_WIDTH],
                 _entries = new Entry[buckets],
                 _growth_left = bucket_mask_to_capacity(buckets - 1),
                 _count = 0
@@ -1098,79 +1033,20 @@ namespace System.Collections.Generic
             {
                 ThrowHelper.ThrowArgumentNullException(ExceptionArgument.key);
             }
-            var hash = GetHashCodeOfKey(key);
-            var h2_hash = h2(hash);
-            var probe_seq = new ProbeSeq(hash, rawTable._bucket_mask);
-            ref Entry entry = ref Unsafe.NullRef<Entry>();
-            IGroup group;
-            fixed (byte* ptr = &rawTable._controls[0])
+            // TODO: inline this for better performance
+            var index = FindBucketIndex(key);
+            if (!index.HasValue)
             {
-                while (true)
-                {
-                    group = _group.load(ptr + probe_seq.pos);
-                    var bitmask = group.match_byte(h2_hash);
-                    // TODO: Iterator and performance, if not influence, iterator would be clearer.
-                    while (bitmask.any_bit_set())
-                    {
-                        Debug.Assert(rawTable._entries != null);
-                        var bit = bitmask.lowest_set_bit()!.Value;
-                        bitmask = bitmask.remove_lowest_bit();
-                        var index = (probe_seq.pos + bit) & rawTable._bucket_mask;
-                        entry = ref rawTable._entries[index];
-                        if (IsKeyEqual(key, entry.Key))
-                        {
-                            return ref entry;
-                        }
-                    }
-                    if (group.match_empty().any_bit_set())
-                    {
-                        return ref Unsafe.NullRef<Entry>();
-                    }
-                    probe_seq.move_next();
-                }
+                return ref Unsafe.NullRef<Entry>();
             }
+            Debug.Assert(this.rawTable._entries != null);
+            return ref this.rawTable._entries[index.Value];
         }
 
         // TODO: use negative as not find
         private unsafe int? FindBucketIndex(TKey key)
         {
-            if (key == null)
-            {
-                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.key);
-            }
-            Debug.Assert(rawTable._entries != null, "expected entries to be != null");
-
-            var hash = GetHashCodeOfKey(key);
-            var h2_hash = h2(hash);
-            var probe_seq = new ProbeSeq(hash, rawTable._bucket_mask);
-            ref Entry entry = ref Unsafe.NullRef<Entry>();
-            IGroup group;
-            fixed (byte* ptr = &rawTable._controls[0])
-            {
-                while (true)
-                {
-                    group = _group.load(ptr + probe_seq.pos);
-                    var bitmask = group.match_byte(h2_hash);
-                    // TODO: Iterator and performance, if not influence, iterator would be clearer.
-                    while (bitmask.any_bit_set())
-                    {
-                        // there must be set bit
-                        var bit = bitmask.lowest_set_bit()!.Value;
-                        bitmask = bitmask.remove_lowest_bit();
-                        var index = (probe_seq.pos + bit) & rawTable._bucket_mask;
-                        entry = ref rawTable._entries[index];
-                        if (IsKeyEqual(key, entry.Key))
-                        {
-                            return index;
-                        }
-                    }
-                    if (group.match_empty().any_bit_set())
-                    {
-                        return null;
-                    }
-                    probe_seq.move_next();
-                }
-            }
+            return DispatchFindBucketIndexOfDictionary(this, key);
         }
 
         private unsafe TValue erase(int index)
@@ -1178,33 +1054,17 @@ namespace System.Collections.Generic
             // Attention, we could not just only set mark to `Deleted` to assume it is deleted, the reference is still here, and GC would not collect it.
             Debug.Assert(is_full(rawTable._controls[index]));
             Debug.Assert(rawTable._entries != null, "entries should be non-null");
-            int index_before = unchecked((index - _group.WIDTH) & rawTable._bucket_mask);
+            var isEraseSafeToSetEmptyControlFlag = DispatchIsEraseSafeToSetEmptyControlFlag(rawTable._controls, index);
             TValue res;
-            IBitMask empty_before;
-            IBitMask empty_after;
-            fixed (byte* ptr_before = &rawTable._controls[index_before])
-            fixed (byte* ptr = &rawTable._controls[index])
-            {
-                empty_before = _group.load(ptr_before).match_empty();
-                empty_after = _group.load(ptr).match_empty();
-            }
             byte ctrl;
-            // If we are inside a continuous block of Group::WIDTH full or deleted
-            // cells then a probe window may have seen a full block when trying to
-            // insert. We therefore need to keep that block non-empty so that
-            // lookups will continue searching to the next probe window.
-            //
-            // Note that in this context `leading_zeros` refers to the bytes at the
-            // end of a group, while `trailing_zeros` refers to the bytes at the
-            // begining of a group.
-            if (empty_before.leading_zeros() + empty_after.trailing_zeros() >= _group.WIDTH)
-            {
-                ctrl = DELETED;
-            }
-            else
+            if (isEraseSafeToSetEmptyControlFlag)
             {
                 ctrl = EMPTY;
                 rawTable._growth_left += 1;
+            }
+            else
+            {
+                ctrl = DELETED;
             }
 
             this.rawTable.set_ctrl(index, ctrl);
@@ -1294,41 +1154,6 @@ namespace System.Collections.Generic
             }
         }
 
-        // Probe sequence based on triangular numbers, which is guaranteed (since our
-        // table size is a power of two) to visit every group of elements exactly once.
-        //
-        // A triangular probe has us jump by 1 more group every time. So first we
-        // jump by 1 group (meaning we just continue our linear scan), then 2 groups
-        // (skipping over 1 group), then 3 groups (skipping over 2 groups), and so on.
-        //
-        // The proof is a simple number theory question: i*(i+1)/2 can walk through the complete residue system of 2n
-        // to prove this, we could prove when "0 <= i <= j < 2n", "i * (i + 1) / 2 mod 2n == j * (j + 1) / 2" iff "i == j"
-        // sufficient: we could have `(i-j)(i+j+1)=4n*k`, k is integer. It is obvious that if i!=j, the left part is odd, but right is always even.
-        // So, the the only chance is i==j
-        // necessary: obvious
-        // Q.E.D.
-        internal struct ProbeSeq
-        {
-            internal int pos;
-            private int _stride;
-            private readonly int _bucket_mask;
-
-            internal ProbeSeq(int hash, int bucket_mask)
-            {
-                this._bucket_mask = bucket_mask;
-                this.pos = h1(hash) & bucket_mask;
-                this._stride = 0;
-            }
-
-            internal void move_next()
-            {
-                // We should have found an empty bucket by now and ended the probe.
-                Debug.Assert(this._stride <= _bucket_mask, "Went past end of probe sequence");
-                unchecked { this._stride += _group.WIDTH; }
-                this.pos += this._stride;
-                this.pos &= _bucket_mask;
-            }
-        }
 
         public struct Enumerator : IEnumerator<KeyValuePair<TKey, TValue>>, IDictionaryEnumerator
         {
@@ -1336,22 +1161,12 @@ namespace System.Collections.Generic
             private readonly int _version;
             private readonly int _tolerantVersion;
             private KeyValuePair<TKey, TValue> _current;
-            private IBitMask _currentBitMask;
-            internal int current_ctrl_offset;
+            private BitMaskUnion _currentBitMask;
+            internal int _currentCtrlOffset;
             private readonly int _getEnumeratorRetType;
-            private bool isValid; // valid when _current has correct value.
+            private bool _isValid; // valid when _current has correct value.
             internal const int DictEntry = 1;
             internal const int KeyValuePair = 2;
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            internal unsafe IBitMask LoadBitMask()
-            {
-                fixed (byte* ctrl = &_dictionary.rawTable._controls[current_ctrl_offset])
-                {
-                    // TODO: Or we should not use load_aligned here? a branch might be more expensive
-                    return _group.load(ctrl).match_full();
-                }
-            }
 
             internal unsafe Enumerator(Dictionary<TKey, TValue> dictionary, int getEnumeratorRetType)
             {
@@ -1360,13 +1175,9 @@ namespace System.Collections.Generic
                 _tolerantVersion = dictionary._tolerantVersion;
                 _getEnumeratorRetType = getEnumeratorRetType;
                 _current = default;
-                current_ctrl_offset = 0;
-                isValid = false;
-                fixed (byte* ctrl = &_dictionary.rawTable._controls[0])
-                {
-                    // TODO: Or we should not use load_aligned here? a branch might be more expensive
-                    _currentBitMask = _group.load(ctrl).match_full();
-                }
+                _currentCtrlOffset = 0;
+                _isValid = false;
+                _currentBitMask = DispatchGetMatchFullBitMask(_dictionary.rawTable._controls, 0);
             }
 
             #region IDictionaryEnumerator
@@ -1374,7 +1185,7 @@ namespace System.Collections.Generic
             {
                 get
                 {
-                    if (!isValid)
+                    if (!_isValid)
                     {
                         ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumOpCantHappen();
                     }
@@ -1387,7 +1198,7 @@ namespace System.Collections.Generic
             {
                 get
                 {
-                    if (!isValid)
+                    if (!_isValid)
                     {
                         ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumOpCantHappen();
                     }
@@ -1400,7 +1211,7 @@ namespace System.Collections.Generic
             {
                 get
                 {
-                    if (!isValid)
+                    if (!_isValid)
                     {
                         ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumOpCantHappen();
                     }
@@ -1416,7 +1227,7 @@ namespace System.Collections.Generic
             {
                 get
                 {
-                    if (!isValid)
+                    if (!_isValid)
                     {
                         ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumOpCantHappen();
                     }
@@ -1436,35 +1247,18 @@ namespace System.Collections.Generic
 
             public unsafe bool MoveNext()
             {
-                if (_version != _dictionary._version)
+                ref var entry = ref DispatchMoveNextDictionary(_version, _tolerantVersion, _dictionary, ref _currentCtrlOffset, ref _currentBitMask);
+                if (!Unsafe.IsNullRef(ref entry))
                 {
-                    ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumFailedVersion();
+                    _isValid = true;
+                    _current = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
+                    return true;
                 }
-                if (_tolerantVersion != _dictionary._tolerantVersion)
+                else
                 {
-                    var newBitMak = LoadBitMask();
-                    this._currentBitMask = this._currentBitMask.And(newBitMak);
-                }
-                while (true)
-                {
-                    var lowest_set_bit = this._currentBitMask.lowest_set_bit();
-                    if (lowest_set_bit.HasValue)
-                    {
-                        Debug.Assert(this._dictionary.rawTable._entries != null);
-                        isValid = true;
-                        this._currentBitMask = this._currentBitMask.remove_lowest_bit();
-                        ref var entry = ref this._dictionary.rawTable._entries[this.current_ctrl_offset + lowest_set_bit.Value];
-                        this._current = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
-                        return true;
-                    }
-                    this.current_ctrl_offset += _group.WIDTH;
-                    if (this.current_ctrl_offset >= this._dictionary._buckets)
-                    {
-                        this._current = default;
-                        isValid = false;
-                        return false;
-                    }
-                    this._currentBitMask = LoadBitMask();
+                    this._current = default;
+                    _isValid = false;
+                    return false;
                 }
             }
             unsafe void IEnumerator.Reset()
@@ -1473,15 +1267,10 @@ namespace System.Collections.Generic
                 {
                     ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumFailedVersion();
                 }
-
                 _current = default;
-                current_ctrl_offset = 0;
-                isValid = false;
-                fixed (byte* ctrl = &_dictionary.rawTable._controls[0])
-                {
-                    // TODO: Or we should not use load_aligned here? a branch might be more expensive
-                    _currentBitMask = _group.load(ctrl).match_full();
-                }
+                _currentCtrlOffset = 0;
+                _isValid = false;
+                _currentBitMask = DispatchGetMatchFullBitMask(_dictionary.rawTable._controls, 0);
             }
             #endregion
         }
@@ -1615,20 +1404,10 @@ namespace System.Collections.Generic
                 private readonly Dictionary<TKey, TValue> _dictionary;
                 private readonly int _version;
                 private readonly int _tolerantVersion;
-                private IBitMask _currentBitMask;
-                internal int current_ctrl_offset;
-                private bool isValid; // valid when _current has correct value.
+                private BitMaskUnion _currentBitMask;
+                internal int _currentCtrlOffset;
+                private bool _isValid; // valid when _current has correct value.
                 private TKey? _current;
-
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                internal unsafe IBitMask LoadBitMask()
-                {
-                    fixed (byte* ctrl = &_dictionary.rawTable._controls[current_ctrl_offset])
-                    {
-                        // TODO: Or we should not use load_aligned here? a branch might be more expensive
-                        return _group.load(ctrl).match_full();
-                    }
-                }
 
                 internal unsafe Enumerator(Dictionary<TKey, TValue> dictionary)
                 {
@@ -1636,48 +1415,27 @@ namespace System.Collections.Generic
                     _version = dictionary._version;
                     _tolerantVersion = dictionary._tolerantVersion;
                     _current = default;
-                    current_ctrl_offset = 0;
-                    isValid = false;
-                    fixed (byte* ctrl = &_dictionary.rawTable._controls[0])
-                    {
-                        // TODO: Or we should not use load_aligned here? a branch might be more expensive
-                        _currentBitMask = _group.load(ctrl).match_full();
-                    }
+                    _currentCtrlOffset = 0;
+                    _isValid = false;
+                    _currentBitMask = DispatchGetMatchFullBitMask(_dictionary.rawTable._controls, 0);
                 }
 
                 public void Dispose() { }
 
                 public unsafe bool MoveNext()
                 {
-                    if (_version != _dictionary._version)
+                    ref var entry = ref DispatchMoveNextDictionary(_version, _tolerantVersion, _dictionary, ref _currentCtrlOffset, ref _currentBitMask);
+                    if (!Unsafe.IsNullRef(ref entry))
                     {
-                        ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumFailedVersion();
+                        _isValid = true;
+                        _current = entry.Key;
+                        return true;
                     }
-                    if (_tolerantVersion != _dictionary._tolerantVersion)
+                    else
                     {
-                        var newBitMak = LoadBitMask();
-                        this._currentBitMask = this._currentBitMask.And(newBitMak);
-                    }
-                    while (true)
-                    {
-                        var lowest_set_bit = this._currentBitMask.lowest_set_bit();
-                        if (lowest_set_bit.HasValue)
-                        {
-                            Debug.Assert(this._dictionary.rawTable._entries != null);
-                            isValid = true;
-                            this._currentBitMask = this._currentBitMask.remove_lowest_bit();
-                            this._current = this._dictionary.rawTable._entries[this.current_ctrl_offset + lowest_set_bit.Value].Key;
-                            return true;
-                        }
-                        this.current_ctrl_offset += _group.WIDTH;
-                        if (this.current_ctrl_offset >= this._dictionary._buckets)
-                        {
-                            this._current = default;
-                            isValid = false;
-                            return false;
-                        }
-
-                        this._currentBitMask = LoadBitMask();
+                        this._current = default;
+                        _isValid = false;
+                        return false;
                     }
                 }
 
@@ -1687,7 +1445,7 @@ namespace System.Collections.Generic
                 {
                     get
                     {
-                        if (!isValid)
+                        if (!_isValid)
                         {
                             ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumOpCantHappen();
                         }
@@ -1704,9 +1462,9 @@ namespace System.Collections.Generic
                     }
 
                     _current = default;
-                    current_ctrl_offset = 0;
-                    isValid = false;
-                    this._currentBitMask = LoadBitMask();
+                    _currentCtrlOffset = 0;
+                    _isValid = false;
+                    _currentBitMask = DispatchGetMatchFullBitMask(_dictionary.rawTable._controls, 0);
                 }
             }
         }
@@ -1837,20 +1595,10 @@ namespace System.Collections.Generic
                 private readonly Dictionary<TKey, TValue> _dictionary;
                 private readonly int _version;
                 private readonly int _tolerantVersion;
-                private IBitMask _currentBitMask;
-                internal int current_ctrl_offset;
-                private bool isValid; // valid when _current has correct value.
+                private BitMaskUnion _currentBitMask;
+                internal int _currentCtrlOffset;
+                private bool _isValid; // valid when _current has correct value.
                 private TValue? _current;
-
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                internal unsafe IBitMask LoadBitMask()
-                {
-                    fixed (byte* ctrl = &_dictionary.rawTable._controls[current_ctrl_offset])
-                    {
-                        // TODO: Or we should not use load_aligned here? a branch might be more expensive
-                        return _group.load(ctrl).match_full();
-                    }
-                }
 
                 internal unsafe Enumerator(Dictionary<TKey, TValue> dictionary)
                 {
@@ -1858,48 +1606,27 @@ namespace System.Collections.Generic
                     _version = dictionary._version;
                     _tolerantVersion = dictionary._tolerantVersion;
                     _current = default;
-                    current_ctrl_offset = 0;
-                    isValid = false;
-                    fixed (byte* ctrl = &_dictionary.rawTable._controls[current_ctrl_offset])
-                    {
-                        // TODO: Or we should not use load_aligned here? a branch might be more expensive
-                        this._currentBitMask = _group.load(ctrl).match_full();
-                    }
+                    _currentCtrlOffset = 0;
+                    _isValid = false;
+                    _currentBitMask = DispatchGetMatchFullBitMask(_dictionary.rawTable._controls, 0);
                 }
 
                 public void Dispose() { }
 
                 public unsafe bool MoveNext()
                 {
-                    if (_version != _dictionary._version)
+                    ref var entry = ref DispatchMoveNextDictionary(_version, _tolerantVersion, _dictionary, ref _currentCtrlOffset, ref _currentBitMask);
+                    if (!Unsafe.IsNullRef(ref entry))
                     {
-                        ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumFailedVersion();
+                        _isValid = true;
+                        _current = entry.Value;
+                        return true;
                     }
-                    if (_tolerantVersion != _dictionary._tolerantVersion)
+                    else
                     {
-                        var newBitMak = LoadBitMask();
-                        this._currentBitMask = this._currentBitMask.And(newBitMak);
-                    }
-                    while (true)
-                    {
-                        var lowest_set_bit = this._currentBitMask.lowest_set_bit();
-                        if (lowest_set_bit.HasValue)
-                        {
-                            Debug.Assert(this._dictionary.rawTable._entries != null);
-                            isValid = true;
-                            this._currentBitMask = this._currentBitMask.remove_lowest_bit();
-                            this._current = this._dictionary.rawTable._entries[this.current_ctrl_offset + lowest_set_bit.Value].Value;
-                            return true;
-                        }
-                        this.current_ctrl_offset += _group.WIDTH;
-                        if (this.current_ctrl_offset >= this._dictionary._buckets)
-                        {
-                            this._current = default;
-                            isValid = false;
-                            return false;
-                        }
-
-                        this._currentBitMask = LoadBitMask();
+                        this._current = default;
+                        _isValid = false;
+                        return false;
                     }
                 }
 
@@ -1909,7 +1636,7 @@ namespace System.Collections.Generic
                 {
                     get
                     {
-                        if (!isValid)
+                        if (!_isValid)
                         {
                             ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumOpCantHappen();
                         }
@@ -1926,9 +1653,9 @@ namespace System.Collections.Generic
                     }
 
                     _current = default;
-                    current_ctrl_offset = 0;
-                    isValid = false;
-                    this._currentBitMask = LoadBitMask();
+                    _currentCtrlOffset = 0;
+                    _isValid = false;
+                    _currentBitMask = DispatchGetMatchFullBitMask(_dictionary.rawTable._controls, 0);
                 }
             }
         }
