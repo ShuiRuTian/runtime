@@ -126,7 +126,7 @@ namespace System.Collections.Generic
             InitializeComparer(comparer);
         }
 
-        public void InitializeComparer(IEqualityComparer<TKey>? comparer)
+        private void InitializeComparer(IEqualityComparer<TKey>? comparer)
         {
             if (comparer is not null && comparer != EqualityComparer<TKey>.Default) // first check for null to avoid forcing default comparer instantiation unnecessarily
             {
@@ -737,18 +737,16 @@ namespace System.Collections.Generic
             // replace
             if (!Unsafe.IsNullRef(ref bucket))
             {
-                switch (behavior)
-                {
-                    case InsertionBehavior.OverwriteExisting:
-                        bucket.Key = key;
-                        bucket.Value = value;
-                        return true;
-                    case InsertionBehavior.ThrowOnExisting:
-                        ThrowHelper.ThrowAddingDuplicateWithKeyArgumentException(key);
-                        break;
-                    case InsertionBehavior.None:
-                        return false;
+                if(behavior == InsertionBehavior.OverwriteExisting){
+                    bucket.Key = key;
+                    bucket.Value = value;
+                    return true;
                 }
+                if(behavior == InsertionBehavior.ThrowOnExisting){
+                    ThrowHelper.ThrowAddingDuplicateWithKeyArgumentException(key);
+                }
+                // InsertionBehavior.None
+                return false;
             }
             // insert new
             var hashCode = this.GetHashCodeOfKey(key);

@@ -349,7 +349,6 @@ namespace System.Collections.Generic
             var equalComparer = hashComparer ?? EqualityComparer<TKey>.Default;
 
             Debug.Assert(controls != null);
-            Debug.Assert(entries != null);
 
             var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
@@ -365,6 +364,7 @@ namespace System.Collections.Generic
                     while (bitmask.any_bit_set())
                     {
                         // there must be set bit
+                        Debug.Assert(entries != null);
                         var bit = bitmask.lowest_set_bit()!.Value;
                         bitmask = bitmask.remove_lowest_bit();
                         var index = (probeSeq.pos + bit) & bucketMask;
@@ -399,7 +399,6 @@ namespace System.Collections.Generic
             var equalComparer = hashComparer ?? EqualityComparer<TKey>.Default;
 
             Debug.Assert(controls != null);
-            Debug.Assert(entries != null);
 
             var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
@@ -416,6 +415,7 @@ namespace System.Collections.Generic
                     while (bitmask.any_bit_set())
                     {
                         // there must be set bit
+                        Debug.Assert(entries != null);
                         var bit = bitmask.lowest_set_bit()!.Value;
                         bitmask = bitmask.remove_lowest_bit();
                         var index = (probeSeq.pos + bit) & bucketMask;
@@ -453,9 +453,9 @@ namespace System.Collections.Generic
             int offset = 0;
             var controls = dictionary.rawTable._controls;
             var entries = dictionary.rawTable._entries;
+            var buckets = entries?.Length ?? 0;
 
             Debug.Assert(controls != null);
-            Debug.Assert(entries != null);
 
             fixed (byte* ptr = &controls[0])
             {
@@ -472,7 +472,7 @@ namespace System.Collections.Generic
                         continue;
                     }
                     offset += GROUP_WIDTH;
-                    if (offset >= entries.Length)
+                    if (offset >= buckets)
                     {
                         break;
                     }
@@ -487,9 +487,9 @@ namespace System.Collections.Generic
             int offset = 0;
             var controls = dictionary.rawTable._controls;
             var entries = dictionary.rawTable._entries;
+            var buckets = entries?.Length ?? 0;
 
             Debug.Assert(controls != null);
-            Debug.Assert(entries != null);
 
             fixed (byte* ptr = &controls[0])
             {
@@ -506,7 +506,7 @@ namespace System.Collections.Generic
                         continue;
                     }
                     offset += GROUP_WIDTH;
-                    if (offset >= entries.Length)
+                    if (offset >= buckets)
                     {
                         break;
                     }
