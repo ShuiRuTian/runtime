@@ -737,12 +737,14 @@ namespace System.Collections.Generic
             // replace
             if (!Unsafe.IsNullRef(ref bucket))
             {
-                if(behavior == InsertionBehavior.OverwriteExisting){
+                if (behavior == InsertionBehavior.OverwriteExisting)
+                {
                     bucket.Key = key;
                     bucket.Value = value;
                     return true;
                 }
-                if(behavior == InsertionBehavior.ThrowOnExisting){
+                if (behavior == InsertionBehavior.ThrowOnExisting)
+                {
                     ThrowHelper.ThrowAddingDuplicateWithKeyArgumentException(key);
                 }
                 // InsertionBehavior.None

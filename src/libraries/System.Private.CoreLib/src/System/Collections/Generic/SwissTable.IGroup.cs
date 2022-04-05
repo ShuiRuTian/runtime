@@ -4,6 +4,7 @@
 namespace System.Collections.Generic
 {
 
+    /// After C#11, `static_empty`, `load` and `load_aligned` should become static abstract mehod
     internal interface IGroup<BitMaskImpl, GroupImpl>
         where BitMaskImpl : struct, IBitMask<BitMaskImpl>
         where GroupImpl : struct, IGroup<BitMaskImpl, GroupImpl>

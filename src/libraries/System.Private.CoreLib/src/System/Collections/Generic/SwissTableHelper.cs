@@ -29,6 +29,7 @@ namespace System.Collections.Generic
         private int _stride;
         private readonly int _bucket_mask;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ProbeSeq(int hash, int bucket_mask)
         {
             this._bucket_mask = bucket_mask;
@@ -36,11 +37,12 @@ namespace System.Collections.Generic
             this._stride = 0;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void move_next()
         {
             // We should have found an empty bucket by now and ended the probe.
             Debug.Assert(this._stride <= _bucket_mask, "Went past end of probe sequence");
-            unchecked { this._stride += SwissTableHelper.GROUP_WIDTH; }
+            this._stride += SwissTableHelper.GROUP_WIDTH;
             this.pos += this._stride;
             this.pos &= _bucket_mask;
         }
@@ -48,21 +50,20 @@ namespace System.Collections.Generic
 
     internal static class SwissTableHelper
     {
-        public static unsafe int GROUP_WIDTH
+        static unsafe SwissTableHelper()
         {
-            get
+            if (Sse2.IsSupported)
             {
-                if (Sse2.IsSupported)
-                {
-                    // 128 bits(_data length) / 8 (byte bits) = 16 bytes
-                    return 128 / 8;
-                }
-                else
-                {
-                    return sizeof(nuint);
-                }
+                // 128 bits(SSE2 use vector 128) / 8 (byte bits) = 16 bytes
+                GROUP_WIDTH = 128 / 8;
+            }
+            else
+            {
+                GROUP_WIDTH = sizeof(nuint);
             }
         }
+
+        public static int GROUP_WIDTH;
 
         /// Control byte value for an empty bucket.
         public const byte EMPTY = 0b1111_1111;
@@ -125,7 +126,8 @@ namespace System.Collections.Generic
                 return controlsLength - GROUP_WIDTH - 1;
         }
 
-        public static byte[] DispatchGetEmptyControls() {
+        public static byte[] DispatchGetEmptyControls()
+        {
             if (Sse2.IsSupported)
             {
                 return _dummySse2Group.static_empty;
@@ -153,7 +155,7 @@ namespace System.Collections.Generic
             BitMaskUnion result = default;
             fixed (byte* ctrl = &controls[index])
             {
-                result.sse2BitMask = _dummySse2Group.load(ctrl).match_full();
+                result.sse2BitMask = default(Sse2Group).load(ctrl).match_full();
             }
             return result;
         }
@@ -163,7 +165,7 @@ namespace System.Collections.Generic
             BitMaskUnion result = default;
             fixed (byte* ctrl = &controls[index])
             {
-                result.fallbackBitMask = _dummyFallbackGroup.load(ctrl).match_full();
+                result.fallbackBitMask = default(FallbackGroup).load(ctrl).match_full();
             }
             return result;
         }
@@ -300,8 +302,8 @@ namespace System.Collections.Generic
             fixed (byte* ptr_before = &controls[indexBefore])
             fixed (byte* ptr = &controls[index])
             {
-                var empty_before = _dummySse2Group.load(ptr_before).match_empty();
-                var empty_after = _dummySse2Group.load(ptr).match_empty();
+                var empty_before = default(Sse2Group).load(ptr_before).match_empty();
+                var empty_after = default(Sse2Group).load(ptr).match_empty();
                 return empty_before.leading_zeros() + empty_after.trailing_zeros() < GROUP_WIDTH;
             }
         }
@@ -313,8 +315,8 @@ namespace System.Collections.Generic
             fixed (byte* ptr_before = &controls[indexBefore])
             fixed (byte* ptr = &controls[index])
             {
-                var empty_before = _dummyFallbackGroup.load(ptr_before).match_empty();
-                var empty_after = _dummyFallbackGroup.load(ptr).match_empty();
+                var empty_before = default(FallbackGroup).load(ptr_before).match_empty();
+                var empty_after = default(FallbackGroup).load(ptr).match_empty();
                 return empty_before.leading_zeros() + empty_after.trailing_zeros() < GROUP_WIDTH;
             }
         }
@@ -358,7 +360,7 @@ namespace System.Collections.Generic
             {
                 while (true)
                 {
-                    var group = _dummySse2Group.load(ptr + probeSeq.pos);
+                    var group = default(Sse2Group).load(ptr + probeSeq.pos);
                     var bitmask = group.match_byte(h2_hash);
                     // TODO: Iterator and performance, if not influence, iterator would be clearer.
                     while (bitmask.any_bit_set())
@@ -409,7 +411,7 @@ namespace System.Collections.Generic
             {
                 while (true)
                 {
-                    var group = _dummyFallbackGroup.load(ptr + probeSeq.pos);
+                    var group = default(FallbackGroup).load(ptr + probeSeq.pos);
                     var bitmask = group.match_byte(h2_hash);
                     // TODO: Iterator and performance, if not influence, iterator would be clearer.
                     while (bitmask.any_bit_set())
@@ -459,7 +461,7 @@ namespace System.Collections.Generic
 
             fixed (byte* ptr = &controls[0])
             {
-                var bitMask = _dummySse2Group.load(ptr).match_full();
+                var bitMask = default(Sse2Group).load(ptr).match_full();
                 while (true)
                 {
                     var lowestSetBit = bitMask.lowest_set_bit();
@@ -476,7 +478,7 @@ namespace System.Collections.Generic
                     {
                         break;
                     }
-                    bitMask = _dummySse2Group.load(ptr + offset).match_full();
+                    bitMask = default(Sse2Group).load(ptr + offset).match_full();
                 }
             }
         }
@@ -493,7 +495,7 @@ namespace System.Collections.Generic
 
             fixed (byte* ptr = &controls[0])
             {
-                var bitMask = _dummyFallbackGroup.load(ptr).match_full();
+                var bitMask = default(FallbackGroup).load(ptr).match_full();
                 while (true)
                 {
                     var lowestSetBit = bitMask.lowest_set_bit();
@@ -510,7 +512,7 @@ namespace System.Collections.Generic
                     {
                         break;
                     }
-                    bitMask = _dummyFallbackGroup.load(ptr + offset).match_full();
+                    bitMask = default(FallbackGroup).load(ptr + offset).match_full();
                 }
             }
         }
@@ -537,7 +539,7 @@ namespace System.Collections.Generic
                 {
                     // TODO: maybe we should lock even fix the whole loop.
                     // I am not sure which would be faster.
-                    var bit = _dummySse2Group.load(ptr + probeSeq.pos)
+                    var bit = default(Sse2Group).load(ptr + probeSeq.pos)
                         .match_empty_or_deleted()
                         .lowest_set_bit();
                     if (bit.HasValue)
@@ -557,7 +559,7 @@ namespace System.Collections.Generic
                         {
                             Debug.Assert(bucketMask < GROUP_WIDTH);
                             Debug.Assert(probeSeq.pos != 0);
-                            return _dummySse2Group.load(ptr)
+                            return default(Sse2Group).load(ptr)
                                 .match_empty_or_deleted()
                                 .lowest_set_bit_nonzero();
                         }
@@ -578,7 +580,7 @@ namespace System.Collections.Generic
                 {
                     // TODO: maybe we should lock even fix the whole loop.
                     // I am not sure which would be faster.
-                    var bit = _dummyFallbackGroup.load(ptr + probeSeq.pos)
+                    var bit = default(FallbackGroup).load(ptr + probeSeq.pos)
                         .match_empty_or_deleted()
                         .lowest_set_bit();
                     if (bit.HasValue)
@@ -598,7 +600,7 @@ namespace System.Collections.Generic
                         {
                             Debug.Assert(bucketMask < GROUP_WIDTH);
                             Debug.Assert(probeSeq.pos != 0);
-                            return _dummyFallbackGroup.load(ptr)
+                            return default(FallbackGroup).load(ptr)
                                 .match_empty_or_deleted()
                                 .lowest_set_bit_nonzero();
                         }
