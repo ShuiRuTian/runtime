@@ -52,7 +52,12 @@ namespace System.Collections.Generic
     {
         static unsafe SwissTableHelper()
         {
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                // 256 bits(AVX2 use vector 256) / 8 (byte bits) = 32 bytes
+                GROUP_WIDTH = 256 / 8;
+            }
+            else if (Sse2.IsSupported)
             {
                 // 128 bits(SSE2 use vector 128) / 8 (byte bits) = 16 bytes
                 GROUP_WIDTH = 128 / 8;
@@ -103,6 +108,7 @@ namespace System.Collections.Generic
 
         // Generally we do not want to duplicate code, but for performance(use struct and inline), we have to do so.
         // The difference between mirror implmentations should only be `_dummyGroup` except `MoveNext`, in which we use C++ union trick
+        private static Avx2Group _dummyAvx2Group;
         private static Sse2Group _dummySse2Group;
         private static FallbackGroup _dummyFallbackGroup;
 
@@ -110,6 +116,8 @@ namespace System.Collections.Generic
         [StructLayout(LayoutKind.Explicit)]
         internal struct BitMaskUnion
         {
+            [FieldOffset(0)]
+            internal Avx2BitMask avx2BitMask;
             [FieldOffset(0)]
             internal Sse2BitMask sse2BitMask;
             [FieldOffset(0)]
@@ -128,7 +136,11 @@ namespace System.Collections.Generic
 
         public static byte[] DispatchGetEmptyControls()
         {
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return _dummyAvx2Group.static_empty;
+            }
+            else if (Sse2.IsSupported)
             {
                 return _dummySse2Group.static_empty;
             }
@@ -140,7 +152,11 @@ namespace System.Collections.Generic
 
         public static BitMaskUnion DispatchGetMatchFullBitMask(byte[] controls, int index)
         {
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return GetMatchFullBitMaskForAvx2(controls, index);
+            }
+            else if (Sse2.IsSupported)
             {
                 return GetMatchFullBitMaskForSse2(controls, index);
             }
@@ -148,6 +164,16 @@ namespace System.Collections.Generic
             {
                 return GetMatchFullBitMaskForFallback(controls, index);
             }
+        }
+
+        private static unsafe BitMaskUnion GetMatchFullBitMaskForAvx2(byte[] controls, int index)
+        {
+            BitMaskUnion result = default;
+            fixed (byte* ctrl = &controls[index])
+            {
+                result.avx2BitMask = default(Avx2Group).load(ctrl).match_full();
+            }
+            return result;
         }
 
         private static unsafe BitMaskUnion GetMatchFullBitMaskForSse2(byte[] controls, int index)
@@ -179,13 +205,61 @@ namespace System.Collections.Generic
             )
             where TKey : notnull
         {
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return ref MoveNextDictionaryForAvx2(version, tolerantVersion, in dictionary, ref currentCtrlOffset, ref currentBitMask);
+            }
+            else if (Sse2.IsSupported)
             {
                 return ref MoveNextDictionaryForSse2(version, tolerantVersion, in dictionary, ref currentCtrlOffset, ref currentBitMask);
             }
             else
             {
                 return ref MoveNextDictionaryForFallback(version, tolerantVersion, in dictionary, ref currentCtrlOffset, ref currentBitMask);
+            }
+        }
+
+
+        public static ref Dictionary<TKey, TValue>.Entry MoveNextDictionaryForAvx2<TKey, TValue>(
+            int version,
+            int tolerantVersion,
+            in Dictionary<TKey, TValue> dictionary,
+            ref int currentCtrlOffset,
+            ref BitMaskUnion currentBitMask
+            )
+            where TKey : notnull
+        {
+            var controls = dictionary.rawTable._controls;
+            var entries = dictionary.rawTable._entries;
+
+            ref var realBitMask = ref currentBitMask.avx2BitMask;
+
+            if (version != dictionary._version)
+            {
+                ThrowHelper.ThrowInvalidOperationException_InvalidOperation_EnumFailedVersion();
+            }
+            if (tolerantVersion != dictionary._tolerantVersion)
+            {
+                var newBitMask = GetMatchFullBitMaskForAvx2(controls, currentCtrlOffset).avx2BitMask;
+                realBitMask = realBitMask.And(newBitMask);
+            }
+
+            while (true)
+            {
+                var lowest_set_bit = realBitMask.lowest_set_bit();
+                if (lowest_set_bit.HasValue)
+                {
+                    Debug.Assert(entries != null);
+                    realBitMask = realBitMask.remove_lowest_bit();
+                    ref var entry = ref entries[currentCtrlOffset + lowest_set_bit.Value];
+                    return ref entry;
+                }
+                currentCtrlOffset += GROUP_WIDTH;
+                if (currentCtrlOffset >= dictionary._buckets)
+                {
+                    return ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                }
+                realBitMask = GetMatchFullBitMaskForAvx2(controls, currentCtrlOffset).avx2BitMask;
             }
         }
 
@@ -287,11 +361,28 @@ namespace System.Collections.Generic
         {
             if (Sse2.IsSupported)
             {
+                return IsEraseSafeToSetEmptyControlFlagForAvx2(controls, index);
+            }
+            else if (Sse2.IsSupported)
+            {
                 return IsEraseSafeToSetEmptyControlFlagForSse2(controls, index);
             }
             else
             {
                 return IsEraseSafeToSetEmptyControlFlagForFallback(controls, index);
+            }
+        }
+
+        private static unsafe bool IsEraseSafeToSetEmptyControlFlagForAvx2(byte[] controls, int index)
+        {
+            var bucketMask = GetBucketMaskFromControlsLength(controls.Length);
+            int indexBefore = unchecked((index - GROUP_WIDTH) & bucketMask);
+            fixed (byte* ptr_before = &controls[indexBefore])
+            fixed (byte* ptr = &controls[index])
+            {
+                var empty_before = default(Avx2Group).load(ptr_before).match_empty();
+                var empty_after = default(Avx2Group).load(ptr).match_empty();
+                return empty_before.leading_zeros() + empty_after.trailing_zeros() < GROUP_WIDTH;
             }
         }
 
@@ -321,10 +412,15 @@ namespace System.Collections.Generic
             }
         }
 
+        // TODO: use negative as not find
         public static int? DispatchFindBucketIndexOfDictionary<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
             where TKey : notnull
         {
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return FindBucketIndexOfDictionaryForAvx2(dictionary, key);
+            }
+            else if (Sse2.IsSupported)
             {
                 return FindBucketIndexOfDictionaryForSse2(dictionary, key);
             }
@@ -334,7 +430,56 @@ namespace System.Collections.Generic
             }
         }
 
-        // TODO: use negative as not find
+        private static unsafe int? FindBucketIndexOfDictionaryForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+           where TKey : notnull
+        {
+            if (key == null)
+            {
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.key);
+            }
+
+            var controls = dictionary.rawTable._controls;
+            var entries = dictionary.rawTable._entries;
+            var bucketMask = dictionary.rawTable._bucket_mask;
+
+            var hashComparer = dictionary._comparer;
+            var equalComparer = hashComparer ?? EqualityComparer<TKey>.Default;
+
+            Debug.Assert(controls != null);
+
+            var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
+            var h2_hash = h2(hash);
+            var probeSeq = new ProbeSeq(hash, bucketMask);
+
+            fixed (byte* ptr = &controls[0])
+            {
+                while (true)
+                {
+                    var group = default(Avx2Group).load(ptr + probeSeq.pos);
+                    var bitmask = group.match_byte(h2_hash);
+                    // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                    while (bitmask.any_bit_set())
+                    {
+                        // there must be set bit
+                        Debug.Assert(entries != null);
+                        var bit = bitmask.lowest_set_bit()!.Value;
+                        bitmask = bitmask.remove_lowest_bit();
+                        var index = (probeSeq.pos + bit) & bucketMask;
+                        ref var entry = ref entries[index];
+                        if (equalComparer.Equals(key, entry.Key))
+                        {
+                            return index;
+                        }
+                    }
+                    if (group.match_empty().any_bit_set())
+                    {
+                        return null;
+                    }
+                    probeSeq.move_next();
+                }
+            }
+        }
+
         private static unsafe int? FindBucketIndexOfDictionaryForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
             where TKey : notnull
         {
@@ -439,13 +584,50 @@ namespace System.Collections.Generic
         public static void DispatchCopyToArrayFromDictionaryWorker<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
             where TKey : notnull
         {
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported) {
+                CopyToArrayFromDictionaryWorkerForAvx2(dictionary, destArray, index);
+            }
+            else if (Sse2.IsSupported)
             {
                 CopyToArrayFromDictionaryWorkerForSse2(dictionary, destArray, index);
             }
             else
             {
                 CopyToArrayFromDictionaryWorkerForFallback(dictionary, destArray, index);
+            }
+        }
+
+        private static unsafe void CopyToArrayFromDictionaryWorkerForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
+            where TKey : notnull
+        {
+            int offset = 0;
+            var controls = dictionary.rawTable._controls;
+            var entries = dictionary.rawTable._entries;
+            var buckets = entries?.Length ?? 0;
+
+            Debug.Assert(controls != null);
+
+            fixed (byte* ptr = &controls[0])
+            {
+                var bitMask = default(Avx2Group).load(ptr).match_full();
+                while (true)
+                {
+                    var lowestSetBit = bitMask.lowest_set_bit();
+                    if (lowestSetBit.HasValue)
+                    {
+                        Debug.Assert(entries != null);
+                        bitMask = bitMask.remove_lowest_bit();
+                        ref var entry = ref entries[offset + lowestSetBit.Value];
+                        destArray[index++] = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
+                        continue;
+                    }
+                    offset += GROUP_WIDTH;
+                    if (offset >= buckets)
+                    {
+                        break;
+                    }
+                    bitMask = default(Avx2Group).load(ptr + offset).match_full();
+                }
             }
         }
 
@@ -519,13 +701,58 @@ namespace System.Collections.Generic
 
         public static int DispatchFindInsertSlot(int hash, byte[] contorls)
         {
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return FindInsertSlotForAvx2(hash, contorls);
+            }
+            else if (Sse2.IsSupported)
             {
                 return FindInsertSlotForSse2(hash, contorls);
             }
             else
             {
                 return FindInsertSlotForFallback(hash, contorls);
+            }
+        }
+
+        private static unsafe int FindInsertSlotForAvx2(int hash, byte[] contorls)
+        {
+            var bucketMask = GetBucketMaskFromControlsLength(contorls.Length);
+            ProbeSeq probeSeq = new ProbeSeq(hash, bucketMask);
+            fixed (byte* ptr = &contorls[0])
+            {
+                while (true)
+                {
+                    // TODO: maybe we should lock even fix the whole loop.
+                    // I am not sure which would be faster.
+                    var bit = default(Avx2Group).load(ptr + probeSeq.pos)
+                        .match_empty_or_deleted()
+                        .lowest_set_bit();
+                    if (bit.HasValue)
+                    {
+                        var result = (probeSeq.pos + bit.Value) & bucketMask;
+
+                        // In tables smaller than the group width, trailing control
+                        // bytes outside the range of the table are filled with
+                        // EMPTY entries. These will unfortunately trigger a
+                        // match, but once masked may point to a full bucket that
+                        // is already occupied. We detect this situation here and
+                        // perform a second scan starting at the begining of the
+                        // table. This second scan is guaranteed to find an empty
+                        // slot (due to the load factor) before hitting the trailing
+                        // control bytes (containing EMPTY).
+                        if (is_full(contorls[result]))
+                        {
+                            Debug.Assert(bucketMask < GROUP_WIDTH);
+                            Debug.Assert(probeSeq.pos != 0);
+                            return default(Avx2Group).load(ptr)
+                                .match_empty_or_deleted()
+                                .lowest_set_bit_nonzero();
+                        }
+                        return result;
+                    }
+                    probeSeq.move_next();
+                }
             }
         }
 
