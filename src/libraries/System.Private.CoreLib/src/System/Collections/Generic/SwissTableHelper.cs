@@ -359,7 +359,7 @@ namespace System.Collections.Generic
         // begining of a group.
         public static bool DispatchIsEraseSafeToSetEmptyControlFlag(byte[] controls, int index)
         {
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 return IsEraseSafeToSetEmptyControlFlagForAvx2(controls, index);
             }
