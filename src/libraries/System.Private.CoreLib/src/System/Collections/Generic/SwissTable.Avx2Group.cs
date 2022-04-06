@@ -40,11 +40,11 @@ namespace System.Collections.Generic
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int? lowest_set_bit()
+        public int lowest_set_bit()
         {
             if (this._data == 0)
             {
-                return null;
+                return -1;
             }
             else
             {
@@ -83,13 +83,14 @@ namespace System.Collections.Generic
         [Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2207:Initialize value type static fields inline", Justification = "The doc says not to suppress this, but how to fix?")]
         static Avx2Group()
         {
-            var res = new byte[256 / 8];
+            WIDTH = 256 / 8;
+            var res = new byte[WIDTH];
             Array.Fill(res, SwissTableHelper.EMPTY);
-            _static_empty = res;
+            static_empty = res;
         }
 
         // 128 bits(_data length) / 8 (byte bits) = 16 bytes
-        public readonly int WIDTH => 256 / 8;
+        public static readonly int WIDTH;
 
         private readonly Vector256<byte> _data;
 
@@ -97,18 +98,17 @@ namespace System.Collections.Generic
         {
             _data = data;
         }
-        private static readonly byte[] _static_empty;
 
-        public readonly byte[] static_empty => _static_empty;
+        public static readonly byte[] static_empty;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe Avx2Group load(byte* ptr)
+        public static unsafe Avx2Group load(byte* ptr)
         {
             return new Avx2Group(Avx2.LoadVector256(ptr));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe Avx2Group load_aligned(byte* ptr)
+        public static unsafe Avx2Group load_aligned(byte* ptr)
         {
             // `uint` casting is OK, WIDTH is 32, so checking lowest 5 bits for address align
             Debug.Assert(((uint)ptr & (WIDTH - 1)) == 0);

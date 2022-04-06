@@ -81,7 +81,7 @@ namespace System.Collections.Generic
             // not check replace, caller should make sure
             internal int find_insert_slot(int hash)
             {
-                return DispatchFindInsertSlot(hash, _controls);
+                return DispatchFindInsertSlot(hash, _controls, _bucket_mask);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -822,6 +822,7 @@ namespace System.Collections.Generic
         // Note that the _entries might still not allocated
         // this means we do not want to use any existing data, including resize or use dictionary initialize
         // `realisticCapacity` is any positive number
+        [SkipLocalsInit]
         private void InitializeInnerTable(int realisticCapacity)
         {
             if (realisticCapacity < 0)
@@ -849,6 +850,7 @@ namespace System.Collections.Generic
             GrowWorker(idealCapacity);
         }
 
+        [SkipLocalsInit]
         private void GrowWorker(int idealEntryLength)
         {
             Debug.Assert(idealEntryLength >= rawTable._count);
@@ -1054,7 +1056,7 @@ namespace System.Collections.Generic
             // Attention, we could not just only set mark to `Deleted` to assume it is deleted, the reference is still here, and GC would not collect it.
             Debug.Assert(is_full(rawTable._controls[index]));
             Debug.Assert(rawTable._entries != null, "entries should be non-null");
-            var isEraseSafeToSetEmptyControlFlag = DispatchIsEraseSafeToSetEmptyControlFlag(rawTable._controls, index);
+            var isEraseSafeToSetEmptyControlFlag = DispatchIsEraseSafeToSetEmptyControlFlag(rawTable._bucket_mask, rawTable._controls, index);
             TValue res;
             byte ctrl;
             if (isEraseSafeToSetEmptyControlFlag)

@@ -45,11 +45,11 @@ namespace System.Collections.Generic
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int? lowest_set_bit()
+        public int lowest_set_bit()
         {
             if (this._data == 0)
             {
-                return null;
+                return -1;
             }
             else
             {
@@ -88,13 +88,14 @@ namespace System.Collections.Generic
         [Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2207:Initialize value type static fields inline", Justification = "The doc says not to suppress this, but how to fix?")]
         static Sse2Group()
         {
-            var res = new byte[128 / 8];
+            WIDTH = 128 / 8;
+            var res = new byte[WIDTH];
             Array.Fill(res, SwissTableHelper.EMPTY);
-            _static_empty = res;
+            static_empty = res;
         }
 
         // 128 bits(_data length) / 8 (byte bits) = 16 bytes
-        public readonly int WIDTH => 128 / 8;
+        public static readonly int WIDTH;
 
         private readonly Vector128<byte> _data;
 
@@ -102,18 +103,17 @@ namespace System.Collections.Generic
         {
             _data = data;
         }
-        private static readonly byte[] _static_empty;
 
-        public readonly byte[] static_empty => _static_empty;
+        public static readonly byte[] static_empty;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe Sse2Group load(byte* ptr)
+        public static unsafe Sse2Group load(byte* ptr)
         {
             return new Sse2Group(Sse2.LoadVector128(ptr));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe Sse2Group load_aligned(byte* ptr)
+        public static unsafe Sse2Group load_aligned(byte* ptr)
         {
             // `uint` casting is OK, WIDTH is 16, so checking lowest 4 bits for address align
             Debug.Assert(((uint)ptr & (WIDTH - 1)) == 0);
