@@ -1035,19 +1035,16 @@ namespace System.Collections.Generic
             {
                 ThrowHelper.ThrowArgumentNullException(ExceptionArgument.key);
             }
-            // TODO: inline this for better performance
-            var index = FindBucketIndex(key);
-            if (index <= 0)
-            {
-                return ref Unsafe.NullRef<Entry>();
-            }
-            Debug.Assert(this.rawTable._entries != null);
-            return ref this.rawTable._entries[index];
+            return ref DispatchFindBucketIndexOfDictionary(this, key);
         }
 
         // TODO: use negative as not find
         private unsafe int FindBucketIndex(TKey key)
         {
+            if (key == null)
+            {
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.key);
+            }
             return DispatchFindBucketIndexOfDictionary(this, key);
         }
 

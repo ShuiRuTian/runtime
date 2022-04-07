@@ -453,6 +453,354 @@ namespace System.Collections.Generic
             }
         }
 
+        public static ref Dictionary<TKey, TValue>.Entry DispatchFindBucketOfDictionary<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+        where TKey : notnull
+        {
+            if (Avx2.IsSupported)
+            {
+                return ref FindBucketOfDictionaryForAvx2(dictionary, key);
+            }
+            else if (Sse2.IsSupported){
+                return ref FindBucketOfDictionaryForSse2(dictionary, key);
+            }
+            else
+            {
+                return ref FindBucketOfDictionaryForFallback(dictionary, key);
+            }
+        }
+
+        private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+        where TKey : notnull
+        {
+            var controls = dictionary.rawTable._controls;
+            var entries = dictionary.rawTable._entries;
+            var bucketMask = dictionary.rawTable._bucket_mask;
+
+            var hashComparer = dictionary._comparer;
+
+            Debug.Assert(controls != null);
+
+            var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
+            var h2_hash = h2(hash);
+            var probeSeq = new ProbeSeq(hash, bucketMask);
+
+            if (hashComparer == null)
+            {
+                if (typeof(TKey).IsValueType)
+                {
+                    fixed (byte* ptr = &controls[0])
+                    {
+                        while (true)
+                        {
+                            var group = Avx2Group.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                {
+                                    return ref entry;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                            }
+                            probeSeq.move_next();
+                        }
+                    }
+                }
+                else
+                {
+                    EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
+                    fixed (byte* ptr = &controls[0])
+                    {
+                        while (true)
+                        {
+                            var group = Avx2Group.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                {
+                                    return ref entry;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return  ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                            }
+                            probeSeq.move_next();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                fixed (byte* ptr = &controls[0])
+                {
+                    while (true)
+                    {
+                        var group = Avx2Group.load(ptr + probeSeq.pos);
+                        var bitmask = group.match_byte(h2_hash);
+                        // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                        while (bitmask.any_bit_set())
+                        {
+                            // there must be set bit
+                            Debug.Assert(entries != null);
+                            var bit = bitmask.lowest_set_bit_nonzero();
+                            bitmask = bitmask.remove_lowest_bit();
+                            var index = (probeSeq.pos + bit) & bucketMask;
+                            ref var entry = ref entries[index];
+                            if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                            {
+                                return ref entry;
+                            }
+                        }
+                        if (group.match_empty().any_bit_set())
+                        {
+                            return ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                        }
+                        probeSeq.move_next();
+                    }
+                }
+            }
+        }
+
+        private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+        where TKey : notnull
+        {
+            var controls = dictionary.rawTable._controls;
+            var entries = dictionary.rawTable._entries;
+            var bucketMask = dictionary.rawTable._bucket_mask;
+
+            var hashComparer = dictionary._comparer;
+
+            Debug.Assert(controls != null);
+
+            var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
+            var h2_hash = h2(hash);
+            var probeSeq = new ProbeSeq(hash, bucketMask);
+
+            if (hashComparer == null)
+            {
+                if (typeof(TKey).IsValueType)
+                {
+                    fixed (byte* ptr = &controls[0])
+                    {
+                        while (true)
+                        {
+                            var group = Sse2Group.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                {
+                                    return ref entry;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                            }
+                            probeSeq.move_next();
+                        }
+                    }
+                }
+                else
+                {
+                    EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
+                    fixed (byte* ptr = &controls[0])
+                    {
+                        while (true)
+                        {
+                            var group = Sse2Group.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                {
+                                    return ref entry;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return  ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                            }
+                            probeSeq.move_next();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                fixed (byte* ptr = &controls[0])
+                {
+                    while (true)
+                    {
+                        var group = Sse2Group.load(ptr + probeSeq.pos);
+                        var bitmask = group.match_byte(h2_hash);
+                        // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                        while (bitmask.any_bit_set())
+                        {
+                            // there must be set bit
+                            Debug.Assert(entries != null);
+                            var bit = bitmask.lowest_set_bit_nonzero();
+                            bitmask = bitmask.remove_lowest_bit();
+                            var index = (probeSeq.pos + bit) & bucketMask;
+                            ref var entry = ref entries[index];
+                            if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                            {
+                                return ref entry;
+                            }
+                        }
+                        if (group.match_empty().any_bit_set())
+                        {
+                            return ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                        }
+                        probeSeq.move_next();
+                    }
+                }
+            }
+        }
+
+        private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForFallback<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+        where TKey : notnull
+        {
+            var controls = dictionary.rawTable._controls;
+            var entries = dictionary.rawTable._entries;
+            var bucketMask = dictionary.rawTable._bucket_mask;
+
+            var hashComparer = dictionary._comparer;
+
+            Debug.Assert(controls != null);
+
+            var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
+            var h2_hash = h2(hash);
+            var probeSeq = new ProbeSeq(hash, bucketMask);
+
+            if (hashComparer == null)
+            {
+                if (typeof(TKey).IsValueType)
+                {
+                    fixed (byte* ptr = &controls[0])
+                    {
+                        while (true)
+                        {
+                            var group = FallbackGroup.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                {
+                                    return ref entry;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                            }
+                            probeSeq.move_next();
+                        }
+                    }
+                }
+                else
+                {
+                    EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
+                    fixed (byte* ptr = &controls[0])
+                    {
+                        while (true)
+                        {
+                            var group = FallbackGroup.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                {
+                                    return ref entry;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return  ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                            }
+                            probeSeq.move_next();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                fixed (byte* ptr = &controls[0])
+                {
+                    while (true)
+                    {
+                        var group = Avx2Group.load(ptr + probeSeq.pos);
+                        var bitmask = group.match_byte(h2_hash);
+                        // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                        while (bitmask.any_bit_set())
+                        {
+                            // there must be set bit
+                            Debug.Assert(entries != null);
+                            var bit = bitmask.lowest_set_bit_nonzero();
+                            bitmask = bitmask.remove_lowest_bit();
+                            var index = (probeSeq.pos + bit) & bucketMask;
+                            ref var entry = ref entries[index];
+                            if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                            {
+                                return ref entry;
+                            }
+                        }
+                        if (group.match_empty().any_bit_set())
+                        {
+                            return ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                        }
+                        probeSeq.move_next();
+                    }
+                }
+            }
+        }
 
         /// <summary>
         /// Find the index of given key, negative means not found.
@@ -481,22 +829,14 @@ namespace System.Collections.Generic
             }
         }
 
-
-
         private static unsafe int FindBucketIndexOfDictionaryForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
            where TKey : notnull
         {
-            if (key == null)
-            {
-                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.key);
-            }
-
             var controls = dictionary.rawTable._controls;
             var entries = dictionary.rawTable._entries;
             var bucketMask = dictionary.rawTable._bucket_mask;
 
             var hashComparer = dictionary._comparer;
-            var equalComparer = hashComparer ?? EqualityComparer<TKey>.Default;
 
             Debug.Assert(controls != null);
 
@@ -504,51 +844,111 @@ namespace System.Collections.Generic
             var h2_hash = h2(hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
-            fixed (byte* ptr = &controls[0])
+            if (hashComparer == null)
             {
-                while (true)
+                if (typeof(TKey).IsValueType)
                 {
-                    var group = Avx2Group.load(ptr + probeSeq.pos);
-                    var bitmask = group.match_byte(h2_hash);
-                    // TODO: Iterator and performance, if not influence, iterator would be clearer.
-                    while (bitmask.any_bit_set())
+                    fixed (byte* ptr = &controls[0])
                     {
-                        // there must be set bit
-                        Debug.Assert(entries != null);
-                        var bit = bitmask.lowest_set_bit_nonzero();
-                        bitmask = bitmask.remove_lowest_bit();
-                        var index = (probeSeq.pos + bit) & bucketMask;
-                        ref var entry = ref entries[index];
-                        if (equalComparer.Equals(key, entry.Key))
+                        while (true)
                         {
-                            return index;
+                            var group = Avx2Group.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                {
+                                    return index;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return -1;
+                            }
+                            probeSeq.move_next();
                         }
                     }
-                    if (group.match_empty().any_bit_set())
+                }
+                else
+                {
+                    EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
+                    fixed (byte* ptr = &controls[0])
                     {
-                        return -1;
+                        while (true)
+                        {
+                            var group = Avx2Group.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (defaultComparer.Equals(key, entry.Key))
+                                {
+                                    return index;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return -1;
+                            }
+                            probeSeq.move_next();
+                        }
                     }
-                    probeSeq.move_next();
+                }
+            }
+            else
+            {
+                fixed (byte* ptr = &controls[0])
+                {
+                    while (true)
+                    {
+                        var group = Avx2Group.load(ptr + probeSeq.pos);
+                        var bitmask = group.match_byte(h2_hash);
+                        // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                        while (bitmask.any_bit_set())
+                        {
+                            // there must be set bit
+                            Debug.Assert(entries != null);
+                            var bit = bitmask.lowest_set_bit_nonzero();
+                            bitmask = bitmask.remove_lowest_bit();
+                            var index = (probeSeq.pos + bit) & bucketMask;
+                            ref var entry = ref entries[index];
+                            if (hashComparer.Equals(key, entry.Key))
+                            {
+                                return index;
+                            }
+                        }
+                        if (group.match_empty().any_bit_set())
+                        {
+                            return -1;
+                        }
+                        probeSeq.move_next();
+                    }
                 }
             }
         }
-
 
 
         private static unsafe int FindBucketIndexOfDictionaryForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
-            where TKey : notnull
+           where TKey : notnull
         {
-            if (key == null)
-            {
-                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.key);
-            }
-
             var controls = dictionary.rawTable._controls;
             var entries = dictionary.rawTable._entries;
             var bucketMask = dictionary.rawTable._bucket_mask;
 
             var hashComparer = dictionary._comparer;
-            var equalComparer = hashComparer ?? EqualityComparer<TKey>.Default;
 
             Debug.Assert(controls != null);
 
@@ -556,51 +956,111 @@ namespace System.Collections.Generic
             var h2_hash = h2(hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
-            fixed (byte* ptr = &controls[0])
+            if (hashComparer == null)
             {
-                while (true)
+                if (typeof(TKey).IsValueType)
                 {
-                    var group = Sse2Group.load(ptr + probeSeq.pos);
-                    var bitmask = group.match_byte(h2_hash);
-                    // TODO: Iterator and performance, if not influence, iterator would be clearer.
-                    while (bitmask.any_bit_set())
+                    fixed (byte* ptr = &controls[0])
                     {
-                        // there must be set bit
-                        Debug.Assert(entries != null);
-                        var bit = bitmask.lowest_set_bit_nonzero();
-                        bitmask = bitmask.remove_lowest_bit();
-                        var index = (probeSeq.pos + bit) & bucketMask;
-                        ref var entry = ref entries[index];
-                        if (equalComparer.Equals(key, entry.Key))
+                        while (true)
                         {
-                            return index;
+                            var group = Sse2Group.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                {
+                                    return index;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return -1;
+                            }
+                            probeSeq.move_next();
                         }
                     }
-                    if (group.match_empty().any_bit_set())
+                }
+                else
+                {
+                    EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
+                    fixed (byte* ptr = &controls[0])
                     {
-                        return -1;
+                        while (true)
+                        {
+                            var group = Sse2Group.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (defaultComparer.Equals(key, entry.Key))
+                                {
+                                    return index;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return -1;
+                            }
+                            probeSeq.move_next();
+                        }
                     }
-                    probeSeq.move_next();
+                }
+            }
+            else
+            {
+                fixed (byte* ptr = &controls[0])
+                {
+                    while (true)
+                    {
+                        var group = Sse2Group.load(ptr + probeSeq.pos);
+                        var bitmask = group.match_byte(h2_hash);
+                        // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                        while (bitmask.any_bit_set())
+                        {
+                            // there must be set bit
+                            Debug.Assert(entries != null);
+                            var bit = bitmask.lowest_set_bit_nonzero();
+                            bitmask = bitmask.remove_lowest_bit();
+                            var index = (probeSeq.pos + bit) & bucketMask;
+                            ref var entry = ref entries[index];
+                            if (hashComparer.Equals(key, entry.Key))
+                            {
+                                return index;
+                            }
+                        }
+                        if (group.match_empty().any_bit_set())
+                        {
+                            return -1;
+                        }
+                        probeSeq.move_next();
+                    }
                 }
             }
         }
-
 
 
         private static unsafe int FindBucketIndexOfDictionaryForFallback<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
-            where TKey : notnull
+           where TKey : notnull
         {
-            if (key == null)
-            {
-                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.key);
-            }
-
             var controls = dictionary.rawTable._controls;
             var entries = dictionary.rawTable._entries;
             var bucketMask = dictionary.rawTable._bucket_mask;
 
             var hashComparer = dictionary._comparer;
-            var equalComparer = hashComparer ?? EqualityComparer<TKey>.Default;
 
             Debug.Assert(controls != null);
 
@@ -608,36 +1068,101 @@ namespace System.Collections.Generic
             var h2_hash = h2(hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
-
-            fixed (byte* ptr = &controls[0])
+            if (hashComparer == null)
             {
-                while (true)
+                if (typeof(TKey).IsValueType)
                 {
-                    var group = FallbackGroup.load(ptr + probeSeq.pos);
-                    var bitmask = group.match_byte(h2_hash);
-                    // TODO: Iterator and performance, if not influence, iterator would be clearer.
-                    while (bitmask.any_bit_set())
+                    fixed (byte* ptr = &controls[0])
                     {
-                        // there must be set bit
-                        Debug.Assert(entries != null);
-                        var bit = bitmask.lowest_set_bit_nonzero();
-                        bitmask = bitmask.remove_lowest_bit();
-                        var index = (probeSeq.pos + bit) & bucketMask;
-                        ref var entry = ref entries[index];
-                        if (equalComparer.Equals(key, entry.Key))
+                        while (true)
                         {
-                            return index;
+                            var group = FallbackGroup.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                {
+                                    return index;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return -1;
+                            }
+                            probeSeq.move_next();
                         }
                     }
-                    if (group.match_empty().any_bit_set())
+                }
+                else
+                {
+                    EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
+                    fixed (byte* ptr = &controls[0])
                     {
-                        return -1;
+                        while (true)
+                        {
+                            var group = FallbackGroup.load(ptr + probeSeq.pos);
+                            var bitmask = group.match_byte(h2_hash);
+                            // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                            while (bitmask.any_bit_set())
+                            {
+                                // there must be set bit
+                                Debug.Assert(entries != null);
+                                var bit = bitmask.lowest_set_bit_nonzero();
+                                bitmask = bitmask.remove_lowest_bit();
+                                var index = (probeSeq.pos + bit) & bucketMask;
+                                ref var entry = ref entries[index];
+                                if (defaultComparer.Equals(key, entry.Key))
+                                {
+                                    return index;
+                                }
+                            }
+                            if (group.match_empty().any_bit_set())
+                            {
+                                return -1;
+                            }
+                            probeSeq.move_next();
+                        }
                     }
-                    probeSeq.move_next();
+                }
+            }
+            else
+            {
+                fixed (byte* ptr = &controls[0])
+                {
+                    while (true)
+                    {
+                        var group = FallbackGroup.load(ptr + probeSeq.pos);
+                        var bitmask = group.match_byte(h2_hash);
+                        // TODO: Iterator and performance, if not influence, iterator would be clearer.
+                        while (bitmask.any_bit_set())
+                        {
+                            // there must be set bit
+                            Debug.Assert(entries != null);
+                            var bit = bitmask.lowest_set_bit_nonzero();
+                            bitmask = bitmask.remove_lowest_bit();
+                            var index = (probeSeq.pos + bit) & bucketMask;
+                            ref var entry = ref entries[index];
+                            if (hashComparer.Equals(key, entry.Key))
+                            {
+                                return index;
+                            }
+                        }
+                        if (group.match_empty().any_bit_set())
+                        {
+                            return -1;
+                        }
+                        probeSeq.move_next();
+                    }
                 }
             }
         }
-
 
 
         public static void DispatchCopyToArrayFromDictionaryWorker<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
