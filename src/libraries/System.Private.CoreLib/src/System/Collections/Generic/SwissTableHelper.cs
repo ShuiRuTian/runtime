@@ -29,7 +29,7 @@ namespace System.Collections.Generic
         private int _stride;
         private readonly int _bucket_mask;
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
         internal ProbeSeq(int hash, int bucket_mask)
         {
             this._bucket_mask = bucket_mask;
@@ -37,7 +37,7 @@ namespace System.Collections.Generic
             this._stride = 0;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
         internal void move_next()
         {
             // We should have found an empty bucket by now and ended the probe.
@@ -50,26 +50,44 @@ namespace System.Collections.Generic
 
     internal static class SwissTableHelper
     {
-        static unsafe SwissTableHelper()
+        //static SwissTableHelper()
+        //{
+        //    if (Avx2.IsSupported)
+        //    {
+        //        // 256 bits(AVX2 use vector 256) / 8 (byte bits) = 32 bytes
+        //        GROUP_WIDTH = 256 / 8;
+        //    }
+        //    else if (Sse2.IsSupported)
+        //    {
+        //        // 128 bits(SSE2 use vector 128) / 8 (byte bits) = 16 bytes
+        //        GROUP_WIDTH = 128 / 8;
+        //    }
+        //    else
+        //    {
+        //        unsafe { GROUP_WIDTH = sizeof(nuint); }
+        //    }
+        //}
+
+        public static int GROUP_WIDTH
         {
-            // if (Avx2.IsSupported)
-            // {
-            //     // 256 bits(AVX2 use vector 256) / 8 (byte bits) = 32 bytes
-            //     GROUP_WIDTH = 256 / 8;
-            // }
-            // else
-            if (Sse2.IsSupported)
+            get
             {
-                // 128 bits(SSE2 use vector 128) / 8 (byte bits) = 16 bytes
-                GROUP_WIDTH = 128 / 8;
-            }
-            else
-            {
-                GROUP_WIDTH = sizeof(nuint);
+                if (Avx2.IsSupported)
+                {
+                    // 256 bits(AVX2 use vector 256) / 8 (byte bits) = 32 bytes
+                    return 256 / 8;
+                }
+                else if (Sse2.IsSupported)
+                {
+                    // 128 bits(SSE2 use vector 128) / 8 (byte bits) = 16 bytes
+                    return 128 / 8;
+                }
+                else
+                {
+                    unsafe { return sizeof(nuint); }
+                }
             }
         }
-
-        public static int GROUP_WIDTH;
 
         /// Control byte value for an empty bucket.
         public const byte EMPTY = 0b1111_1111;
@@ -132,16 +150,15 @@ namespace System.Collections.Generic
                 return controlsLength - GROUP_WIDTH - 1;
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         public static byte[] DispatchGetEmptyControls()
         {
-            // if (Avx2.IsSupported)
-            // {
-            //     return _dummyAvx2Group.static_empty;
-            // }
-            // else
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return Avx2Group.static_empty;
+            }
+            else if (Sse2.IsSupported)
             {
                 return Sse2Group.static_empty;
             }
@@ -151,16 +168,15 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         public static BitMaskUnion DispatchGetMatchFullBitMask(byte[] controls, int index)
         {
-            // if (Avx2.IsSupported)
-            // {
-            //     return GetMatchFullBitMaskForAvx2(controls, index);
-            // }
-            // else
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return GetMatchFullBitMaskForAvx2(controls, index);
+            }
+            else if (Sse2.IsSupported)
             {
                 return GetMatchFullBitMaskForSse2(controls, index);
             }
@@ -170,8 +186,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe BitMaskUnion GetMatchFullBitMaskForAvx2(byte[] controls, int index)
         {
             BitMaskUnion result = default;
@@ -182,8 +198,8 @@ namespace System.Collections.Generic
             return result;
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe BitMaskUnion GetMatchFullBitMaskForSse2(byte[] controls, int index)
         {
             BitMaskUnion result = default;
@@ -194,8 +210,8 @@ namespace System.Collections.Generic
             return result;
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe BitMaskUnion GetMatchFullBitMaskForFallback(byte[] controls, int index)
         {
             BitMaskUnion result = default;
@@ -206,8 +222,8 @@ namespace System.Collections.Generic
             return result;
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         public static ref Dictionary<TKey, TValue>.Entry DispatchMoveNextDictionary<TKey, TValue>(
             int version,
             int tolerantVersion,
@@ -217,12 +233,11 @@ namespace System.Collections.Generic
             )
             where TKey : notnull
         {
-            // if (Avx2.IsSupported)
-            // {
-            //     return ref MoveNextDictionaryForAvx2(version, tolerantVersion, in dictionary, ref currentCtrlOffset, ref currentBitMask);
-            // }
-            // else
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return ref MoveNextDictionaryForAvx2(version, tolerantVersion, in dictionary, ref currentCtrlOffset, ref currentBitMask);
+            }
+            else if (Sse2.IsSupported)
             {
                 return ref MoveNextDictionaryForSse2(version, tolerantVersion, in dictionary, ref currentCtrlOffset, ref currentBitMask);
             }
@@ -232,8 +247,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         public static ref Dictionary<TKey, TValue>.Entry MoveNextDictionaryForAvx2<TKey, TValue>(
             int version,
             int tolerantVersion,
@@ -277,8 +292,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         public static ref Dictionary<TKey, TValue>.Entry MoveNextDictionaryForSse2<TKey, TValue>(
             int version,
             int tolerantVersion,
@@ -322,8 +337,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         public static ref Dictionary<TKey, TValue>.Entry MoveNextDictionaryForFallback<TKey, TValue>(
             int version,
             int tolerantVersion,
@@ -375,16 +390,15 @@ namespace System.Collections.Generic
         // Note that in this context `leading_zeros` refers to the bytes at the
         // end of a group, while `trailing_zeros` refers to the bytes at the
         // begining of a group.
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         public static bool DispatchIsEraseSafeToSetEmptyControlFlag(int bucketMask, byte[] controls, int index)
         {
-            // if (Avx2.IsSupported)
-            // {
-            //     return IsEraseSafeToSetEmptyControlFlagForAvx2(bucketMask, controls, index);
-            // }
-            // else
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return IsEraseSafeToSetEmptyControlFlagForAvx2(bucketMask, controls, index);
+            }
+            else if (Sse2.IsSupported)
             {
                 return IsEraseSafeToSetEmptyControlFlagForSse2(bucketMask, controls, index);
             }
@@ -394,8 +408,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe bool IsEraseSafeToSetEmptyControlFlagForAvx2(int bucketMask, byte[] controls, int index)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(controls.Length));
@@ -409,8 +423,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe bool IsEraseSafeToSetEmptyControlFlagForSse2(int bucketMask, byte[] controls, int index)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(controls.Length));
@@ -424,8 +438,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe bool IsEraseSafeToSetEmptyControlFlagForFallback(int bucketMask, byte[] controls, int index)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(controls.Length));
@@ -439,17 +453,25 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int? DispatchFindBucketIndexOfDictionary<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+
+        /// <summary>
+        /// Find the index of given key, negative means not found.
+        /// </summary>
+        /// <typeparam name="TKey"></typeparam>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="dictionary"></param>
+        /// <param name="key"></param>
+        /// <returns>
+        /// negative return value means not found
+        /// </returns>
+        public static int DispatchFindBucketIndexOfDictionary<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
             where TKey : notnull
         {
-            // if (Avx2.IsSupported)
-            // {
-            //     return FindBucketIndexOfDictionaryForAvx2(dictionary, key);
-            // }
-            // else
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return FindBucketIndexOfDictionaryForAvx2(dictionary, key);
+            }
+            else if (Sse2.IsSupported)
             {
                 return FindBucketIndexOfDictionaryForSse2(dictionary, key);
             }
@@ -459,9 +481,9 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe int? FindBucketIndexOfDictionaryForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+
+
+        private static unsafe int FindBucketIndexOfDictionaryForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
            where TKey : notnull
         {
             if (key == null)
@@ -504,16 +526,16 @@ namespace System.Collections.Generic
                     }
                     if (group.match_empty().any_bit_set())
                     {
-                        return null;
+                        return -1;
                     }
                     probeSeq.move_next();
                 }
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe int? FindBucketIndexOfDictionaryForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+
+
+        private static unsafe int FindBucketIndexOfDictionaryForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
             where TKey : notnull
         {
             if (key == null)
@@ -556,16 +578,16 @@ namespace System.Collections.Generic
                     }
                     if (group.match_empty().any_bit_set())
                     {
-                        return null;
+                        return -1;
                     }
                     probeSeq.move_next();
                 }
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe int? FindBucketIndexOfDictionaryForFallback<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+
+
+        private static unsafe int FindBucketIndexOfDictionaryForFallback<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
             where TKey : notnull
         {
             if (key == null)
@@ -609,24 +631,23 @@ namespace System.Collections.Generic
                     }
                     if (group.match_empty().any_bit_set())
                     {
-                        return null;
+                        return -1;
                     }
                     probeSeq.move_next();
                 }
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         public static void DispatchCopyToArrayFromDictionaryWorker<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
             where TKey : notnull
         {
-            // if (Avx2.IsSupported)
-            // {
-            //     CopyToArrayFromDictionaryWorkerForAvx2(dictionary, destArray, index);
-            // }
-            // else
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                CopyToArrayFromDictionaryWorkerForAvx2(dictionary, destArray, index);
+            }
+            else if (Sse2.IsSupported)
             {
                 CopyToArrayFromDictionaryWorkerForSse2(dictionary, destArray, index);
             }
@@ -636,8 +657,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe void CopyToArrayFromDictionaryWorkerForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
             where TKey : notnull
         {
@@ -672,8 +693,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe void CopyToArrayFromDictionaryWorkerForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
             where TKey : notnull
         {
@@ -708,8 +729,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe void CopyToArrayFromDictionaryWorkerForFallback<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
             where TKey : notnull
         {
@@ -744,16 +765,15 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         public static int DispatchFindInsertSlot(int hash, byte[] contorls, int bucketMask)
         {
-            // if (Avx2.IsSupported)
-            // {
-            //     return FindInsertSlotForAvx2(hash, contorls, bucketMask);
-            // }
-            // else
-            if (Sse2.IsSupported)
+            if (Avx2.IsSupported)
+            {
+                return FindInsertSlotForAvx2(hash, contorls, bucketMask);
+            }
+            else if (Sse2.IsSupported)
             {
                 return FindInsertSlotForSse2(hash, contorls, bucketMask);
             }
@@ -763,8 +783,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe int FindInsertSlotForAvx2(int hash, byte[] contorls, int bucketMask)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(contorls.Length));
@@ -806,8 +826,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe int FindInsertSlotForSse2(int hash, byte[] contorls, int bucketMask)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(contorls.Length));
@@ -849,8 +869,8 @@ namespace System.Collections.Generic
             }
         }
 
-        [SkipLocalsInit]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+
         private static unsafe int FindInsertSlotForFallback(int hash, byte[] contorls, int bucketMask)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(contorls.Length));

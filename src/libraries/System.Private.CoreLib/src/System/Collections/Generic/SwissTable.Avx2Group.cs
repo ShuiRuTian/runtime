@@ -83,14 +83,13 @@ namespace System.Collections.Generic
         [Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2207:Initialize value type static fields inline", Justification = "The doc says not to suppress this, but how to fix?")]
         static Avx2Group()
         {
-            WIDTH = 256 / 8;
             var res = new byte[WIDTH];
             Array.Fill(res, SwissTableHelper.EMPTY);
             static_empty = res;
         }
 
-        // 128 bits(_data length) / 8 (byte bits) = 16 bytes
-        public static readonly int WIDTH;
+        // 256 bits(_data length) / 8 (byte bits) = 32 bytes
+        private const int WIDTH = 256 / 8;
 
         private readonly Vector256<byte> _data;
 

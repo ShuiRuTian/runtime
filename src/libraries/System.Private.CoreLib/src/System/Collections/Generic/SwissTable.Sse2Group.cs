@@ -14,7 +14,6 @@ namespace System.Collections.Generic
         private const ushort BITMASK_MASK = 0xffff;
 
         // 128 / 8 = 16, so choose ushort
-        // Or maybe we could use `int` with only lowset 16 bits and some trick?
         internal readonly ushort _data;
 
         internal Sse2BitMask(ushort data)
@@ -88,14 +87,13 @@ namespace System.Collections.Generic
         [Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2207:Initialize value type static fields inline", Justification = "The doc says not to suppress this, but how to fix?")]
         static Sse2Group()
         {
-            WIDTH = 128 / 8;
             var res = new byte[WIDTH];
             Array.Fill(res, SwissTableHelper.EMPTY);
             static_empty = res;
         }
 
         // 128 bits(_data length) / 8 (byte bits) = 16 bytes
-        public static readonly int WIDTH;
+        private const int WIDTH = 128 / 8;
 
         private readonly Vector128<byte> _data;
 

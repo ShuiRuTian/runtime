@@ -298,9 +298,9 @@ namespace System.Collections.Generic
             if (this.rawTable._entries != null)
             {
                 var index = this.FindBucketIndex(key);
-                if (index != null)
+                if (index >= 0)
                 {
-                    this.erase(index.Value);
+                    this.erase(index);
                     _tolerantVersion++;
                     return true;
                 }
@@ -318,9 +318,9 @@ namespace System.Collections.Generic
             if (this.rawTable._entries != null)
             {
                 var index = this.FindBucketIndex(key);
-                if (index != null)
+                if (index >= 0)
                 {
-                    value = this.erase(index.Value);
+                    value = this.erase(index);
                     _tolerantVersion++;
                     return true;
                 }
@@ -1037,16 +1037,16 @@ namespace System.Collections.Generic
             }
             // TODO: inline this for better performance
             var index = FindBucketIndex(key);
-            if (!index.HasValue)
+            if (index <= 0)
             {
                 return ref Unsafe.NullRef<Entry>();
             }
             Debug.Assert(this.rawTable._entries != null);
-            return ref this.rawTable._entries[index.Value];
+            return ref this.rawTable._entries[index];
         }
 
         // TODO: use negative as not find
-        private unsafe int? FindBucketIndex(TKey key)
+        private unsafe int FindBucketIndex(TKey key)
         {
             return DispatchFindBucketIndexOfDictionary(this, key);
         }
