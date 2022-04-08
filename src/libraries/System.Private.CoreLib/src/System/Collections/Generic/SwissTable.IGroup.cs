@@ -4,7 +4,7 @@
 namespace System.Collections.Generic
 {
 
-    /// After C#11, `static_empty`, `load` and `load_aligned` should become static abstract mehod
+    /// After C#11, `static_empty`, `create`, `load` and `load_aligned` should become static abstract mehod
     internal interface IGroup<BitMaskImpl, GroupImpl>
         where BitMaskImpl : struct, IBitMask<BitMaskImpl>
         where GroupImpl : struct, IGroup<BitMaskImpl, GroupImpl>
@@ -57,6 +57,24 @@ namespace System.Collections.Generic
         /// <param name="b"></param>
         /// <returns></returns>
         BitMaskImpl match_byte(byte b);
+
+        // <summary>
+        // Returns a `GroupImpl` with given byte brodcast.
+        // </summary>
+        // <param name="group"></param>
+        // <returns></returns>
+        // match_byte is good enough, however, we do not have readonly parameter now,
+        // so we need add this as an optimsation.
+        // GroupImpl create(byte b);
+
+        // match_byte is good enough, however, we do not have readonly parameter now,
+        // so we need add this as an optimsation.
+        /// <summary>
+        /// Returns a `BitMask` indicating all bytes in the group is matched with another group
+        /// </summary>
+        /// <param name="group"></param>
+        /// <returns></returns>
+        BitMaskImpl match_group(GroupImpl group);
 
         /// <summary>
         /// Returns a `BitMask` indicating all bytes in the group which are

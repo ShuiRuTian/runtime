@@ -764,8 +764,9 @@ namespace System.Collections.Generic
             }
             Debug.Assert(rawTable._entries != null);
             this.rawTable.record_item_insert_at(index, old_ctrl, hashCode);
-            this.rawTable._entries[index].Key = key;
-            this.rawTable._entries[index].Value = value;
+            ref var targetEntry = ref this.rawTable._entries[index];
+            targetEntry.Key = key;
+            targetEntry.Value = value;
             _version++;
             return true;
         }
@@ -977,6 +978,7 @@ namespace System.Collections.Generic
         /// leave the data pointer dangling since that bucket is never written to
         /// due to our load factor forcing us to always have at least 1 free bucket.
         /// </summary>
+        [SkipLocalsInit]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static RawTableInner NewEmptyInnerTable()
         {
@@ -997,6 +999,7 @@ namespace System.Collections.Generic
         /// </summary>
         // unlike rust, we never cares about out of memory
         // TODO: Maybe ref to improve performance?
+        [SkipLocalsInit]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static RawTableInner NewInnerTableWithControlUninitialized(int buckets)
         {
@@ -1011,13 +1014,6 @@ namespace System.Collections.Generic
             };
         }
 
-        private bool IsKeyEqual(TKey key1, TKey key2)
-        {
-            // TODO: in Dictionary, this is a complex condition to improve performance, learn from it.
-            var comparer = this._comparer ?? EqualityComparer<TKey>.Default;
-            return comparer.Equals(key1, key2);
-        }
-
         internal ref TValue FindValue(TKey key)
         {
             // TODO: We might choose to dulpcate here too just like FindBucketIndex, but not now.
@@ -1029,16 +1025,17 @@ namespace System.Collections.Generic
             return ref bucket.Value;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe ref Entry FindBucket(TKey key)
         {
             if (key == null)
             {
                 ThrowHelper.ThrowArgumentNullException(ExceptionArgument.key);
             }
-            return ref DispatchFindBucketIndexOfDictionary(this, key);
+            return ref DispatchFindBucketOfDictionary(this, key);
         }
 
-        // TODO: use negative as not find
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe int FindBucketIndex(TKey key)
         {
             if (key == null)

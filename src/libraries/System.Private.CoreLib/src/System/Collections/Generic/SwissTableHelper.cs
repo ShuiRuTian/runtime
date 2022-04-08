@@ -29,7 +29,8 @@ namespace System.Collections.Generic
         private int _stride;
         private readonly int _bucket_mask;
 
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ProbeSeq(int hash, int bucket_mask)
         {
             this._bucket_mask = bucket_mask;
@@ -37,7 +38,8 @@ namespace System.Collections.Generic
             this._stride = 0;
         }
 
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void move_next()
         {
             // We should have found an empty bucket by now and ended the probe.
@@ -150,8 +152,8 @@ namespace System.Collections.Generic
                 return controlsLength - GROUP_WIDTH - 1;
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static byte[] DispatchGetEmptyControls()
         {
             if (Avx2.IsSupported)
@@ -168,8 +170,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BitMaskUnion DispatchGetMatchFullBitMask(byte[] controls, int index)
         {
             if (Avx2.IsSupported)
@@ -186,8 +188,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe BitMaskUnion GetMatchFullBitMaskForAvx2(byte[] controls, int index)
         {
             BitMaskUnion result = default;
@@ -198,8 +200,8 @@ namespace System.Collections.Generic
             return result;
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe BitMaskUnion GetMatchFullBitMaskForSse2(byte[] controls, int index)
         {
             BitMaskUnion result = default;
@@ -210,8 +212,8 @@ namespace System.Collections.Generic
             return result;
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe BitMaskUnion GetMatchFullBitMaskForFallback(byte[] controls, int index)
         {
             BitMaskUnion result = default;
@@ -222,8 +224,8 @@ namespace System.Collections.Generic
             return result;
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref Dictionary<TKey, TValue>.Entry DispatchMoveNextDictionary<TKey, TValue>(
             int version,
             int tolerantVersion,
@@ -247,8 +249,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref Dictionary<TKey, TValue>.Entry MoveNextDictionaryForAvx2<TKey, TValue>(
             int version,
             int tolerantVersion,
@@ -292,8 +294,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref Dictionary<TKey, TValue>.Entry MoveNextDictionaryForSse2<TKey, TValue>(
             int version,
             int tolerantVersion,
@@ -337,8 +339,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref Dictionary<TKey, TValue>.Entry MoveNextDictionaryForFallback<TKey, TValue>(
             int version,
             int tolerantVersion,
@@ -390,8 +392,8 @@ namespace System.Collections.Generic
         // Note that in this context `leading_zeros` refers to the bytes at the
         // end of a group, while `trailing_zeros` refers to the bytes at the
         // begining of a group.
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool DispatchIsEraseSafeToSetEmptyControlFlag(int bucketMask, byte[] controls, int index)
         {
             if (Avx2.IsSupported)
@@ -408,8 +410,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe bool IsEraseSafeToSetEmptyControlFlagForAvx2(int bucketMask, byte[] controls, int index)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(controls.Length));
@@ -423,8 +425,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe bool IsEraseSafeToSetEmptyControlFlagForSse2(int bucketMask, byte[] controls, int index)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(controls.Length));
@@ -438,8 +440,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe bool IsEraseSafeToSetEmptyControlFlagForFallback(int bucketMask, byte[] controls, int index)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(controls.Length));
@@ -453,6 +455,8 @@ namespace System.Collections.Generic
             }
         }
 
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref Dictionary<TKey, TValue>.Entry DispatchFindBucketOfDictionary<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
         where TKey : notnull
         {
@@ -469,6 +473,8 @@ namespace System.Collections.Generic
             }
         }
 
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
         where TKey : notnull
         {
@@ -580,6 +586,8 @@ namespace System.Collections.Generic
             }
         }
 
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
         where TKey : notnull
         {
@@ -691,6 +699,8 @@ namespace System.Collections.Generic
             }
         }
 
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForFallback<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
         where TKey : notnull
         {
@@ -812,6 +822,8 @@ namespace System.Collections.Generic
         /// <returns>
         /// negative return value means not found
         /// </returns>
+                [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int DispatchFindBucketIndexOfDictionary<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
             where TKey : notnull
         {
@@ -829,6 +841,8 @@ namespace System.Collections.Generic
             }
         }
 
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe int FindBucketIndexOfDictionaryForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
            where TKey : notnull
         {
@@ -842,6 +856,7 @@ namespace System.Collections.Generic
 
             var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
+            var targetGroup = Avx2Group.create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
             if (hashComparer == null)
@@ -853,7 +868,7 @@ namespace System.Collections.Generic
                         while (true)
                         {
                             var group = Avx2Group.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -884,7 +899,7 @@ namespace System.Collections.Generic
                         while (true)
                         {
                             var group = Avx2Group.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -915,7 +930,7 @@ namespace System.Collections.Generic
                     while (true)
                     {
                         var group = Avx2Group.load(ptr + probeSeq.pos);
-                        var bitmask = group.match_byte(h2_hash);
+                        var bitmask = group.match_group(targetGroup);
                         // TODO: Iterator and performance, if not influence, iterator would be clearer.
                         while (bitmask.any_bit_set())
                         {
@@ -940,7 +955,8 @@ namespace System.Collections.Generic
             }
         }
 
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe int FindBucketIndexOfDictionaryForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
            where TKey : notnull
         {
@@ -954,6 +970,7 @@ namespace System.Collections.Generic
 
             var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
+            var targetGroup = Sse2Group.create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
             if (hashComparer == null)
@@ -965,7 +982,7 @@ namespace System.Collections.Generic
                         while (true)
                         {
                             var group = Sse2Group.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -996,7 +1013,7 @@ namespace System.Collections.Generic
                         while (true)
                         {
                             var group = Sse2Group.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -1027,7 +1044,7 @@ namespace System.Collections.Generic
                     while (true)
                     {
                         var group = Sse2Group.load(ptr + probeSeq.pos);
-                        var bitmask = group.match_byte(h2_hash);
+                        var bitmask = group.match_group(targetGroup);
                         // TODO: Iterator and performance, if not influence, iterator would be clearer.
                         while (bitmask.any_bit_set())
                         {
@@ -1052,7 +1069,8 @@ namespace System.Collections.Generic
             }
         }
 
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe int FindBucketIndexOfDictionaryForFallback<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
            where TKey : notnull
         {
@@ -1066,6 +1084,7 @@ namespace System.Collections.Generic
 
             var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
+            var targetGroup = FallbackGroup.create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
             if (hashComparer == null)
@@ -1077,7 +1096,7 @@ namespace System.Collections.Generic
                         while (true)
                         {
                             var group = FallbackGroup.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -1108,7 +1127,7 @@ namespace System.Collections.Generic
                         while (true)
                         {
                             var group = FallbackGroup.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -1139,7 +1158,7 @@ namespace System.Collections.Generic
                     while (true)
                     {
                         var group = FallbackGroup.load(ptr + probeSeq.pos);
-                        var bitmask = group.match_byte(h2_hash);
+                        var bitmask = group.match_group(targetGroup);
                         // TODO: Iterator and performance, if not influence, iterator would be clearer.
                         while (bitmask.any_bit_set())
                         {
@@ -1164,7 +1183,8 @@ namespace System.Collections.Generic
             }
         }
 
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void DispatchCopyToArrayFromDictionaryWorker<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
             where TKey : notnull
         {
@@ -1182,8 +1202,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe void CopyToArrayFromDictionaryWorkerForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
             where TKey : notnull
         {
@@ -1218,8 +1238,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe void CopyToArrayFromDictionaryWorkerForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
             where TKey : notnull
         {
@@ -1254,8 +1274,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe void CopyToArrayFromDictionaryWorkerForFallback<TKey, TValue>(Dictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] destArray, int index)
             where TKey : notnull
         {
@@ -1290,8 +1310,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int DispatchFindInsertSlot(int hash, byte[] contorls, int bucketMask)
         {
             if (Avx2.IsSupported)
@@ -1308,8 +1328,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe int FindInsertSlotForAvx2(int hash, byte[] contorls, int bucketMask)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(contorls.Length));
@@ -1351,8 +1371,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe int FindInsertSlotForSse2(int hash, byte[] contorls, int bucketMask)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(contorls.Length));
@@ -1394,8 +1414,8 @@ namespace System.Collections.Generic
             }
         }
 
-
-
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe int FindInsertSlotForFallback(int hash, byte[] contorls, int bucketMask)
         {
             Debug.Assert(bucketMask == GetBucketMaskFromControlsLength(contorls.Length));

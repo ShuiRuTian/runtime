@@ -131,10 +131,13 @@ namespace System.Collections.Generic
             return new Avx2BitMask((uint)Avx2.MoveMask(cmp));
         }
 
+        private static readonly Avx2Group EmptyGroup = create(SwissTableHelper.EMPTY);
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Avx2BitMask match_empty()
         {
-            return this.match_byte(SwissTableHelper.EMPTY);
+            return this.match_group(EmptyGroup);
+            // return this.match_byte(SwissTableHelper.EMPTY);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -166,6 +169,19 @@ namespace System.Collections.Generic
             // TODO: check whether asXXXX could be removed.
             var special = Avx2.CompareGreaterThan(zero, this._data.AsSByte()).AsByte();
             return new Avx2Group(Avx2.Or(special, Vector256.Create((byte)0x80)));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Avx2Group create(byte b)
+        {
+            return new Avx2Group(Vector256.Create(b));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Avx2BitMask match_group(Avx2Group group)
+        {
+            var cmp = Avx2.CompareEqual(this._data, group._data);
+            return new Avx2BitMask((uint)Avx2.MoveMask(cmp));
         }
     }
 }

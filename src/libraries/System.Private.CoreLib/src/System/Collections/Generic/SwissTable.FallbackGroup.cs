@@ -191,5 +191,15 @@ namespace System.Collections.Generic
         {
             return this.match_empty_or_deleted().invert();
         }
+
+        public static FallbackGroup create(byte b)
+        {
+            throw new NotImplementedException();
+        }
+
+        public FallbackBitMask match_group(FallbackGroup group)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

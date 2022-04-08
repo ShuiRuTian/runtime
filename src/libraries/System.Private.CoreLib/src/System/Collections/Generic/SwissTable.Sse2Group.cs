@@ -171,5 +171,15 @@ namespace System.Collections.Generic
             var special = Sse2.CompareGreaterThan(zero, this._data.AsSByte()).AsByte();
             return new Sse2Group(Sse2.Or(special, Vector128.Create((byte)0x80)));
         }
+
+        public static Sse2Group create(byte b)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Sse2BitMask match_group(Sse2Group group)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
