@@ -80,16 +80,8 @@ namespace System.Collections.Generic
     // TODO: suppress default initialization.
     internal struct Avx2Group : IGroup<Avx2BitMask, Avx2Group>
     {
-        [Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2207:Initialize value type static fields inline", Justification = "The doc says not to suppress this, but how to fix?")]
-        static Avx2Group()
-        {
-            var res = new byte[WIDTH];
-            Array.Fill(res, SwissTableHelper.EMPTY);
-            static_empty = res;
-        }
-
         // 256 bits(_data length) / 8 (byte bits) = 32 bytes
-        private const int WIDTH = 256 / 8;
+        public static int WIDTH => 256 / 8;
 
         private readonly Vector256<byte> _data;
 
@@ -98,7 +90,14 @@ namespace System.Collections.Generic
             _data = data;
         }
 
-        public static readonly byte[] static_empty;
+        public static readonly byte[] static_empty = InitialStaticEmpty();
+
+        private static byte[] InitialStaticEmpty()
+        {
+            var res = new byte[WIDTH];
+            Array.Fill(res, SwissTableHelper.EMPTY);
+            return res;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe Avx2Group load(byte* ptr)

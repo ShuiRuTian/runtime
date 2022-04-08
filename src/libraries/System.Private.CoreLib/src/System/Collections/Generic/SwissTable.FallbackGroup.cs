@@ -91,18 +91,16 @@ namespace System.Collections.Generic
 
     internal struct FallbackGroup : IGroup<FallbackBitMask, FallbackGroup>
     {
-        [Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2207:Initialize value type static fields inline", Justification = "The doc says not to suppress this, but how to fix?")]
-        static unsafe FallbackGroup()
+        public static unsafe int WIDTH => sizeof(nuint);
+
+        public static readonly byte[] static_empty = InitialStaticEmpty();
+
+        private static byte[] InitialStaticEmpty()
         {
-            WIDTH = sizeof(nuint);
             var res = new byte[WIDTH];
             Array.Fill(res, SwissTableHelper.EMPTY);
-            static_empty = res;
+            return res;
         }
-
-        public static readonly int WIDTH;
-
-        public static readonly byte[] static_empty;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe FallbackGroup load(byte* ptr)

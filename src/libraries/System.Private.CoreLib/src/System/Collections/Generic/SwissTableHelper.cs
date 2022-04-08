@@ -52,42 +52,21 @@ namespace System.Collections.Generic
 
     internal static class SwissTableHelper
     {
-        //static SwissTableHelper()
-        //{
-        //    if (Avx2.IsSupported)
-        //    {
-        //        // 256 bits(AVX2 use vector 256) / 8 (byte bits) = 32 bytes
-        //        GROUP_WIDTH = 256 / 8;
-        //    }
-        //    else if (Sse2.IsSupported)
-        //    {
-        //        // 128 bits(SSE2 use vector 128) / 8 (byte bits) = 16 bytes
-        //        GROUP_WIDTH = 128 / 8;
-        //    }
-        //    else
-        //    {
-        //        unsafe { GROUP_WIDTH = sizeof(nuint); }
-        //    }
-        //}
+        public static readonly int GROUP_WIDTH = InitialGroupWidth();
 
-        public static int GROUP_WIDTH
+        public static int InitialGroupWidth()
         {
-            get
+            if (Avx2.IsSupported)
             {
-                if (Avx2.IsSupported)
-                {
-                    // 256 bits(AVX2 use vector 256) / 8 (byte bits) = 32 bytes
-                    return 256 / 8;
-                }
-                else if (Sse2.IsSupported)
-                {
-                    // 128 bits(SSE2 use vector 128) / 8 (byte bits) = 16 bytes
-                    return 128 / 8;
-                }
-                else
-                {
-                    unsafe { return sizeof(nuint); }
-                }
+                return Avx2Group.WIDTH;
+            }
+            else if (Sse2.IsSupported)
+            {
+                return Sse2Group.WIDTH;
+            }
+            else
+            {
+                return FallbackGroup.WIDTH;
             }
         }
 
@@ -464,7 +443,8 @@ namespace System.Collections.Generic
             {
                 return ref FindBucketOfDictionaryForAvx2(dictionary, key);
             }
-            else if (Sse2.IsSupported){
+            else if (Sse2.IsSupported)
+            {
                 return ref FindBucketOfDictionaryForSse2(dictionary, key);
             }
             else
@@ -547,7 +527,7 @@ namespace System.Collections.Generic
                             }
                             if (group.match_empty().any_bit_set())
                             {
-                                return  ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                                return ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
                             }
                             probeSeq.move_next();
                         }
@@ -660,7 +640,7 @@ namespace System.Collections.Generic
                             }
                             if (group.match_empty().any_bit_set())
                             {
-                                return  ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                                return ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
                             }
                             probeSeq.move_next();
                         }
@@ -773,7 +753,7 @@ namespace System.Collections.Generic
                             }
                             if (group.match_empty().any_bit_set())
                             {
-                                return  ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
+                                return ref Unsafe.NullRef<Dictionary<TKey, TValue>.Entry>();
                             }
                             probeSeq.move_next();
                         }
@@ -822,10 +802,10 @@ namespace System.Collections.Generic
         /// <returns>
         /// negative return value means not found
         /// </returns>
-                [SkipLocalsInit]
+        [SkipLocalsInit]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int DispatchFindBucketIndexOfDictionary<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
-            where TKey : notnull
+    where TKey : notnull
         {
             if (Avx2.IsSupported)
             {

@@ -84,16 +84,8 @@ namespace System.Collections.Generic
     // TODO: suppress default initialization.
     internal struct Sse2Group : IGroup<Sse2BitMask, Sse2Group>
     {
-        [Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2207:Initialize value type static fields inline", Justification = "The doc says not to suppress this, but how to fix?")]
-        static Sse2Group()
-        {
-            var res = new byte[WIDTH];
-            Array.Fill(res, SwissTableHelper.EMPTY);
-            static_empty = res;
-        }
-
         // 128 bits(_data length) / 8 (byte bits) = 16 bytes
-        private const int WIDTH = 128 / 8;
+        public static int WIDTH => 128 / 8;
 
         private readonly Vector128<byte> _data;
 
@@ -102,7 +94,14 @@ namespace System.Collections.Generic
             _data = data;
         }
 
-        public static readonly byte[] static_empty;
+        public static readonly byte[] static_empty = InitialStaticEmpty();
+
+        private static byte[] InitialStaticEmpty()
+        {
+            var res = new byte[WIDTH];
+            Array.Fill(res, SwissTableHelper.EMPTY);
+            return res;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe Sse2Group load(byte* ptr)
