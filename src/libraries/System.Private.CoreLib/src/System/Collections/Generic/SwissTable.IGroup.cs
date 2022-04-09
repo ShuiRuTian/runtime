@@ -48,7 +48,7 @@ namespace System.Collections.Generic
         /// aligned to WIDTH
         /// </summary>
         /// <param name="ptr"></param>
-        unsafe void store_aligned(byte* ptr);
+        unsafe void StoreAligned(byte* ptr);
 
         /// <summary>
         /// Returns a `BitMask` indicating all bytes in the group which have
@@ -56,7 +56,7 @@ namespace System.Collections.Generic
         /// </summary>
         /// <param name="b"></param>
         /// <returns></returns>
-        BitMaskImpl match_byte(byte b);
+        BitMaskImpl MatchByte(byte b);
 
         // <summary>
         // Returns a `GroupImpl` with given byte brodcast.
@@ -74,27 +74,27 @@ namespace System.Collections.Generic
         /// </summary>
         /// <param name="group"></param>
         /// <returns></returns>
-        BitMaskImpl match_group(GroupImpl group);
+        BitMaskImpl MatchGroup(GroupImpl group);
 
         /// <summary>
         /// Returns a `BitMask` indicating all bytes in the group which are
         /// `EMPTY`.
         /// </summary>
         /// <returns></returns>
-        BitMaskImpl match_empty();
+        BitMaskImpl MatchEmpty();
 
         /// <summary>
         /// Returns a `BitMask` indicating all bytes in the group which are
         /// `EMPTY` or `DELETED`.
         /// </summary>
         /// <returns></returns>
-        BitMaskImpl match_empty_or_deleted();
+        BitMaskImpl MatchEmptyOrDeleted();
 
 
         /// <summary>
         /// Returns a `BitMask` indicating all bytes in the group which are full.
         /// </summary>
         /// <returns></returns>
-        BitMaskImpl match_full();
+        BitMaskImpl MatchFull();
     }
 }

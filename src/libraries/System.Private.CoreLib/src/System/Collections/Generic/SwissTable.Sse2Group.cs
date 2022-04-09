@@ -22,19 +22,19 @@ namespace System.Collections.Generic
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Sse2BitMask invert()
+        public Sse2BitMask Invert()
         {
             return new Sse2BitMask((ushort)(this._data ^ BITMASK_MASK));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool any_bit_set()
+        public bool AnyBitSet()
         {
             return this._data != 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int leading_zeros()
+        public int LeadingZeros()
         {
             // maigc number `16`
             // type of `this._data` is `short`
@@ -44,7 +44,7 @@ namespace System.Collections.Generic
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int lowest_set_bit()
+        public int LowestSetBit()
         {
             if (this._data == 0)
             {
@@ -52,24 +52,24 @@ namespace System.Collections.Generic
             }
             else
             {
-                return this.lowest_set_bit_nonzero();
+                return this.LowestSetBitNonzero();
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int lowest_set_bit_nonzero()
+        public int LowestSetBitNonzero()
         {
-            return this.trailing_zeros();
+            return this.TrailingZeros();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Sse2BitMask remove_lowest_bit()
+        public Sse2BitMask RemoveLowestBit()
         {
             return new Sse2BitMask((ushort)(this._data & (this._data - 1)));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int trailing_zeros()
+        public int TrailingZeros()
         {
             return BitOperations.TrailingZeroCount(this._data);
         }
@@ -118,7 +118,7 @@ namespace System.Collections.Generic
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe void store_aligned(byte* ptr)
+        public unsafe void StoreAligned(byte* ptr)
         {
             // `uint` casting is OK, WIDTH is 16, so checking lowest 4 bits for address align
             Debug.Assert(((uint)ptr & (WIDTH - 1)) == 0);
@@ -126,7 +126,7 @@ namespace System.Collections.Generic
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Sse2BitMask match_byte(byte b)
+        public Sse2BitMask MatchByte(byte b)
         {
             // TODO: Check how compiler create this, which command it uses. This might incluence performance dramatically.
             var compareValue = Vector128.Create(b);
@@ -135,22 +135,22 @@ namespace System.Collections.Generic
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Sse2BitMask match_empty()
+        public Sse2BitMask MatchEmpty()
         {
-            return this.match_byte(SwissTableHelper.EMPTY);
+            return this.MatchByte(SwissTableHelper.EMPTY);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Sse2BitMask match_empty_or_deleted()
+        public Sse2BitMask MatchEmptyOrDeleted()
         {
             // A byte is EMPTY or DELETED iff the high bit is set
             return new Sse2BitMask((ushort)Sse2.MoveMask(this._data));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Sse2BitMask match_full()
+        public Sse2BitMask MatchFull()
         {
-            return this.match_empty_or_deleted().invert();
+            return this.MatchEmptyOrDeleted().Invert();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -176,7 +176,7 @@ namespace System.Collections.Generic
             throw new NotImplementedException();
         }
 
-        public Sse2BitMask match_group(Sse2Group group)
+        public Sse2BitMask MatchGroup(Sse2Group group)
         {
             throw new NotImplementedException();
         }
