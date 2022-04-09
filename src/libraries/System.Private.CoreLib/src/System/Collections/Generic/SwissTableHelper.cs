@@ -468,18 +468,19 @@ namespace System.Collections.Generic
 
             var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
+            var targetGroup = Avx2Group.create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
             if (hashComparer == null)
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
                             var group = Avx2Group.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -505,12 +506,12 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
                             var group = Avx2Group.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -536,12 +537,12 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = &controls[0])
+                fixed (byte* ptr = controls)
                 {
                     while (true)
                     {
                         var group = Avx2Group.load(ptr + probeSeq.pos);
-                        var bitmask = group.match_byte(h2_hash);
+                        var bitmask = group.match_group(targetGroup);
                         // TODO: Iterator and performance, if not influence, iterator would be clearer.
                         while (bitmask.any_bit_set())
                         {
@@ -581,18 +582,19 @@ namespace System.Collections.Generic
 
             var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
+            var targetGroup = Sse2Group.create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
             if (hashComparer == null)
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
                             var group = Sse2Group.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -618,12 +620,12 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
                             var group = Sse2Group.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -649,12 +651,12 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = &controls[0])
+                fixed (byte* ptr = controls)
                 {
                     while (true)
                     {
                         var group = Sse2Group.load(ptr + probeSeq.pos);
-                        var bitmask = group.match_byte(h2_hash);
+                        var bitmask = group.match_group(targetGroup);
                         // TODO: Iterator and performance, if not influence, iterator would be clearer.
                         while (bitmask.any_bit_set())
                         {
@@ -694,18 +696,19 @@ namespace System.Collections.Generic
 
             var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
+            var targetGroup = FallbackGroup.create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
             if (hashComparer == null)
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
                             var group = FallbackGroup.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -731,12 +734,12 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
                             var group = FallbackGroup.load(ptr + probeSeq.pos);
-                            var bitmask = group.match_byte(h2_hash);
+                            var bitmask = group.match_group(targetGroup);
                             // TODO: Iterator and performance, if not influence, iterator would be clearer.
                             while (bitmask.any_bit_set())
                             {
@@ -762,12 +765,12 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = &controls[0])
+                fixed (byte* ptr = controls)
                 {
                     while (true)
                     {
-                        var group = Avx2Group.load(ptr + probeSeq.pos);
-                        var bitmask = group.match_byte(h2_hash);
+                        var group = FallbackGroup.load(ptr + probeSeq.pos);
+                        var bitmask = group.match_group(targetGroup);
                         // TODO: Iterator and performance, if not influence, iterator would be clearer.
                         while (bitmask.any_bit_set())
                         {
@@ -843,7 +846,7 @@ namespace System.Collections.Generic
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
@@ -874,7 +877,7 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
@@ -905,7 +908,7 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = &controls[0])
+                fixed (byte* ptr = controls)
                 {
                     while (true)
                     {
@@ -957,7 +960,7 @@ namespace System.Collections.Generic
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
@@ -988,7 +991,7 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
@@ -1019,7 +1022,7 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = &controls[0])
+                fixed (byte* ptr = controls)
                 {
                     while (true)
                     {
@@ -1071,7 +1074,7 @@ namespace System.Collections.Generic
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
@@ -1102,7 +1105,7 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = &controls[0])
+                    fixed (byte* ptr = controls)
                     {
                         while (true)
                         {
@@ -1133,7 +1136,7 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = &controls[0])
+                fixed (byte* ptr = controls)
                 {
                     while (true)
                     {
@@ -1194,7 +1197,7 @@ namespace System.Collections.Generic
 
             Debug.Assert(controls != null);
 
-            fixed (byte* ptr = &controls[0])
+            fixed (byte* ptr = controls)
             {
                 var bitMask = Avx2Group.load(ptr).match_full();
                 while (true)
@@ -1230,7 +1233,7 @@ namespace System.Collections.Generic
 
             Debug.Assert(controls != null);
 
-            fixed (byte* ptr = &controls[0])
+            fixed (byte* ptr = controls)
             {
                 var bitMask = Sse2Group.load(ptr).match_full();
                 while (true)
@@ -1266,7 +1269,7 @@ namespace System.Collections.Generic
 
             Debug.Assert(controls != null);
 
-            fixed (byte* ptr = &controls[0])
+            fixed (byte* ptr = controls)
             {
                 var bitMask = FallbackGroup.load(ptr).match_full();
                 while (true)
