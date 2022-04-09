@@ -134,10 +134,13 @@ namespace System.Collections.Generic
             return new Sse2BitMask((ushort)Sse2.MoveMask(cmp));
         }
 
+        private static readonly Sse2Group EmptyGroup = Create(SwissTableHelper.EMPTY);
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Sse2BitMask MatchEmpty()
         {
-            return this.MatchByte(SwissTableHelper.EMPTY);
+            return this.MatchGroup(EmptyGroup);
+            //return this.MatchByte(SwissTableHelper.EMPTY);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -171,14 +174,17 @@ namespace System.Collections.Generic
             return new Sse2Group(Sse2.Or(special, Vector128.Create((byte)0x80)));
         }
 
-        public static Sse2Group create(byte b)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Sse2Group Create(byte b)
         {
-            throw new NotImplementedException();
+            return new Sse2Group(Vector128.Create(b));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Sse2BitMask MatchGroup(Sse2Group group)
         {
-            throw new NotImplementedException();
+            var cmp = Sse2.CompareEqual(this._data, group._data);
+            return new Sse2BitMask((ushort)Sse2.MoveMask(cmp));
         }
     }
 }

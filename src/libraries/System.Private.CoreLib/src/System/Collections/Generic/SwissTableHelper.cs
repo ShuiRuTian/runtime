@@ -582,7 +582,7 @@ namespace System.Collections.Generic
 
             var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
-            var targetGroup = Sse2Group.create(h2_hash);
+            var targetGroup = Sse2Group.Create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
             if (hashComparer == null)
@@ -953,7 +953,7 @@ namespace System.Collections.Generic
 
             var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
-            var targetGroup = Sse2Group.create(h2_hash);
+            var targetGroup = Sse2Group.Create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
 
             if (hashComparer == null)
