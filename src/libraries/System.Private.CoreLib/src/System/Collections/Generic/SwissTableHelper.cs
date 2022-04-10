@@ -60,7 +60,8 @@ namespace System.Collections.Generic
             {
                 return Avx2Group.WIDTH;
             }
-            else if (Sse2.IsSupported)
+            else
+            if (Sse2.IsSupported)
             {
                 return Sse2Group.WIDTH;
             }
@@ -139,7 +140,8 @@ namespace System.Collections.Generic
             {
                 return Avx2Group.StaticEmpty;
             }
-            else if (Sse2.IsSupported)
+            else
+            if (Sse2.IsSupported)
             {
                 return Sse2Group.static_empty;
             }
@@ -157,7 +159,8 @@ namespace System.Collections.Generic
             {
                 return GetMatchFullBitMaskForAvx2(controls, index);
             }
-            else if (Sse2.IsSupported)
+            else
+            if (Sse2.IsSupported)
             {
                 return GetMatchFullBitMaskForSse2(controls, index);
             }
@@ -218,7 +221,8 @@ namespace System.Collections.Generic
             {
                 return ref MoveNextDictionaryForAvx2(version, tolerantVersion, in dictionary, ref currentCtrlOffset, ref currentBitMask);
             }
-            else if (Sse2.IsSupported)
+            else
+            if (Sse2.IsSupported)
             {
                 return ref MoveNextDictionaryForSse2(version, tolerantVersion, in dictionary, ref currentCtrlOffset, ref currentBitMask);
             }
@@ -379,7 +383,8 @@ namespace System.Collections.Generic
             {
                 return IsEraseSafeToSetEmptyControlFlagForAvx2(bucketMask, controls, index);
             }
-            else if (Sse2.IsSupported)
+            else
+            if (Sse2.IsSupported)
             {
                 return IsEraseSafeToSetEmptyControlFlagForSse2(bucketMask, controls, index);
             }
@@ -436,26 +441,27 @@ namespace System.Collections.Generic
 
         [SkipLocalsInit]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ref Dictionary<TKey, TValue>.Entry DispatchFindBucketOfDictionary<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+        public static ref Dictionary<TKey, TValue>.Entry DispatchFindBucketOfDictionary<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key, int hashOfKey)
         where TKey : notnull
         {
             if (Avx2.IsSupported)
             {
-                return ref FindBucketOfDictionaryForAvx2(dictionary, key);
+                return ref FindBucketOfDictionaryForAvx2(dictionary, key, hashOfKey);
             }
-            else if (Sse2.IsSupported)
+            else
+            if (Sse2.IsSupported)
             {
-                return ref FindBucketOfDictionaryForSse2(dictionary, key);
+                return ref FindBucketOfDictionaryForSse2(dictionary, key, hashOfKey);
             }
             else
             {
-                return ref FindBucketOfDictionaryForFallback(dictionary, key);
+                return ref FindBucketOfDictionaryForFallback(dictionary, key, hashOfKey);
             }
         }
 
         [SkipLocalsInit]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+        private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForAvx2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key, int hash)
         where TKey : notnull
         {
             var controls = dictionary.rawTable._controls;
@@ -466,7 +472,6 @@ namespace System.Collections.Generic
 
             Debug.Assert(controls != null);
 
-            var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
             var targetGroup = Avx2Group.Create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
@@ -569,7 +574,7 @@ namespace System.Collections.Generic
 
         [SkipLocalsInit]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+        private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForSse2<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key, int hash)
         where TKey : notnull
         {
             var controls = dictionary.rawTable._controls;
@@ -580,7 +585,6 @@ namespace System.Collections.Generic
 
             Debug.Assert(controls != null);
 
-            var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
             var targetGroup = Sse2Group.Create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
@@ -683,7 +687,7 @@ namespace System.Collections.Generic
 
         [SkipLocalsInit]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForFallback<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key)
+        private static unsafe ref Dictionary<TKey, TValue>.Entry FindBucketOfDictionaryForFallback<TKey, TValue>(Dictionary<TKey, TValue> dictionary, TKey key, int hash)
         where TKey : notnull
         {
             var controls = dictionary.rawTable._controls;
@@ -694,7 +698,6 @@ namespace System.Collections.Generic
 
             Debug.Assert(controls != null);
 
-            var hash = hashComparer == null ? key.GetHashCode() : hashComparer.GetHashCode(key);
             var h2_hash = h2(hash);
             var targetGroup = FallbackGroup.create(h2_hash);
             var probeSeq = new ProbeSeq(hash, bucketMask);
@@ -814,7 +817,8 @@ namespace System.Collections.Generic
             {
                 return FindBucketIndexOfDictionaryForAvx2(dictionary, key);
             }
-            else if (Sse2.IsSupported)
+            else
+            if (Sse2.IsSupported)
             {
                 return FindBucketIndexOfDictionaryForSse2(dictionary, key);
             }
@@ -1175,7 +1179,8 @@ namespace System.Collections.Generic
             {
                 CopyToArrayFromDictionaryWorkerForAvx2(dictionary, destArray, index);
             }
-            else if (Sse2.IsSupported)
+            else
+            if (Sse2.IsSupported)
             {
                 CopyToArrayFromDictionaryWorkerForSse2(dictionary, destArray, index);
             }
@@ -1301,7 +1306,8 @@ namespace System.Collections.Generic
             {
                 return FindInsertSlotForAvx2(hash, contorls, bucketMask);
             }
-            else if (Sse2.IsSupported)
+            else
+            if (Sse2.IsSupported)
             {
                 return FindInsertSlotForSse2(hash, contorls, bucketMask);
             }
