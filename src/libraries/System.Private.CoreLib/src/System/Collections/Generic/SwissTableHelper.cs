@@ -480,7 +480,7 @@ namespace System.Collections.Generic
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -511,7 +511,7 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -526,7 +526,7 @@ namespace System.Collections.Generic
                                 bitmask = bitmask.RemoveLowestBit();
                                 var index = (probeSeq.pos + bit) & bucketMask;
                                 ref var entry = ref entries[index];
-                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                if (defaultComparer.Equals(key, entry.Key))
                                 {
                                     return ref entry;
                                 }
@@ -542,7 +542,7 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = controls)
+                fixed (byte* ptr = &controls[0])
                 {
                     while (true)
                     {
@@ -557,7 +557,7 @@ namespace System.Collections.Generic
                             bitmask = bitmask.RemoveLowestBit();
                             var index = (probeSeq.pos + bit) & bucketMask;
                             ref var entry = ref entries[index];
-                            if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                            if (hashComparer.Equals(key, entry.Key))
                             {
                                 return ref entry;
                             }
@@ -593,7 +593,7 @@ namespace System.Collections.Generic
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -624,7 +624,7 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -639,7 +639,7 @@ namespace System.Collections.Generic
                                 bitmask = bitmask.RemoveLowestBit();
                                 var index = (probeSeq.pos + bit) & bucketMask;
                                 ref var entry = ref entries[index];
-                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                if (defaultComparer.Equals(key, entry.Key))
                                 {
                                     return ref entry;
                                 }
@@ -655,7 +655,7 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = controls)
+                fixed (byte* ptr = &controls[0])
                 {
                     while (true)
                     {
@@ -670,7 +670,7 @@ namespace System.Collections.Generic
                             bitmask = bitmask.RemoveLowestBit();
                             var index = (probeSeq.pos + bit) & bucketMask;
                             ref var entry = ref entries[index];
-                            if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                            if (hashComparer.Equals(key, entry.Key))
                             {
                                 return ref entry;
                             }
@@ -706,7 +706,7 @@ namespace System.Collections.Generic
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -737,7 +737,7 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -752,7 +752,7 @@ namespace System.Collections.Generic
                                 bitmask = bitmask.RemoveLowestBit();
                                 var index = (probeSeq.pos + bit) & bucketMask;
                                 ref var entry = ref entries[index];
-                                if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                                if (defaultComparer.Equals(key, entry.Key))
                                 {
                                     return ref entry;
                                 }
@@ -768,7 +768,7 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = controls)
+                fixed (byte* ptr = &controls[0])
                 {
                     while (true)
                     {
@@ -783,7 +783,7 @@ namespace System.Collections.Generic
                             bitmask = bitmask.RemoveLowestBit();
                             var index = (probeSeq.pos + bit) & bucketMask;
                             ref var entry = ref entries[index];
-                            if (EqualityComparer<TKey>.Default.Equals(key, entry.Key))
+                            if (hashComparer.Equals(key, entry.Key))
                             {
                                 return ref entry;
                             }
@@ -850,7 +850,7 @@ namespace System.Collections.Generic
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -881,7 +881,7 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -912,7 +912,7 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = controls)
+                fixed (byte* ptr = &controls[0])
                 {
                     while (true)
                     {
@@ -964,7 +964,7 @@ namespace System.Collections.Generic
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -995,7 +995,7 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -1026,7 +1026,7 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = controls)
+                fixed (byte* ptr = &controls[0])
                 {
                     while (true)
                     {
@@ -1078,7 +1078,7 @@ namespace System.Collections.Generic
             {
                 if (typeof(TKey).IsValueType)
                 {
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -1109,7 +1109,7 @@ namespace System.Collections.Generic
                 else
                 {
                     EqualityComparer<TKey> defaultComparer = EqualityComparer<TKey>.Default;
-                    fixed (byte* ptr = controls)
+                    fixed (byte* ptr = &controls[0])
                     {
                         while (true)
                         {
@@ -1140,7 +1140,7 @@ namespace System.Collections.Generic
             }
             else
             {
-                fixed (byte* ptr = controls)
+                fixed (byte* ptr = &controls[0])
                 {
                     while (true)
                     {
@@ -1202,7 +1202,7 @@ namespace System.Collections.Generic
 
             Debug.Assert(controls != null);
 
-            fixed (byte* ptr = controls)
+            fixed (byte* ptr = &controls[0])
             {
                 var bitMask = Avx2Group.Load(ptr).MatchFull();
                 while (true)
@@ -1238,7 +1238,7 @@ namespace System.Collections.Generic
 
             Debug.Assert(controls != null);
 
-            fixed (byte* ptr = controls)
+            fixed (byte* ptr = &controls[0])
             {
                 var bitMask = Sse2Group.load(ptr).MatchFull();
                 while (true)
@@ -1274,7 +1274,7 @@ namespace System.Collections.Generic
 
             Debug.Assert(controls != null);
 
-            fixed (byte* ptr = controls)
+            fixed (byte* ptr = &controls[0])
             {
                 var bitMask = FallbackGroup.load(ptr).MatchFull();
                 while (true)
