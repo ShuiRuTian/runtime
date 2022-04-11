@@ -87,7 +87,7 @@ namespace System.Collections.Generic
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal void record_item_insert_at(int index, byte old_ctrl, int hash)
             {
-                _growth_left -= special_is_empty(old_ctrl) ? 1 : 0;
+                _growth_left -= special_is_empty_with_int_return(old_ctrl);
                 set_ctrl_h2(index, hash);
                 _count += 1;
             }
@@ -342,10 +342,10 @@ namespace System.Collections.Generic
         {
             get
             {
-                ref TValue value = ref FindValue(key);
-                if (!Unsafe.IsNullRef(ref value))
+                ref Entry entry = ref FindBucket(key);
+                if (!Unsafe.IsNullRef(ref entry))
                 {
-                    return value;
+                    return entry.Value;
                 }
 
                 ThrowHelper.ThrowKeyNotFoundException(key);
@@ -360,10 +360,10 @@ namespace System.Collections.Generic
 
         public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
         {
-            ref TValue valRef = ref FindValue(key);
-            if (!Unsafe.IsNullRef(ref valRef))
+            ref Entry entry = ref FindBucket(key);
+            if (!Unsafe.IsNullRef(ref entry))
             {
-                value = valRef;
+                value = entry.Value;
                 return true;
             }
 
@@ -446,10 +446,10 @@ namespace System.Collections.Generic
             {
                 if (IsCompatibleKey(key))
                 {
-                    ref TValue value = ref FindValue((TKey)key);
-                    if (!Unsafe.IsNullRef(ref value))
+                    ref Entry entry = ref FindBucket((TKey)key);
+                    if (!Unsafe.IsNullRef(ref entry))
                     {
-                        return value;
+                        return entry.Value;
                     }
                 }
 
@@ -625,8 +625,8 @@ namespace System.Collections.Generic
 
         bool ICollection<KeyValuePair<TKey, TValue>>.Remove(KeyValuePair<TKey, TValue> keyValuePair)
         {
-            ref TValue value = ref FindValue(keyValuePair.Key);
-            if (!Unsafe.IsNullRef(ref value) && EqualityComparer<TValue>.Default.Equals(value, keyValuePair.Value))
+            ref Entry bucket = ref FindBucket(keyValuePair.Key);
+            if (!Unsafe.IsNullRef(ref bucket) && EqualityComparer<TValue>.Default.Equals(bucket.Value, keyValuePair.Value))
             {
                 Remove(keyValuePair.Key);
                 return true;

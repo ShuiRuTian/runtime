@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
@@ -88,6 +88,14 @@ namespace System.Collections.Generic
         {
             Debug.Assert(is_special(ctrl));
             return (ctrl & 0x01) != 0;
+        }
+
+        /// Checks whether a special control value is EMPTY.
+        // optimise: return 1 as true, 0 as false
+        public static int special_is_empty_with_int_return(byte ctrl)
+        {
+            Debug.Assert(is_special(ctrl));
+            return ctrl & 0x01;
         }
 
         /// Primary hash function, used to select the initial bucket to probe from.
