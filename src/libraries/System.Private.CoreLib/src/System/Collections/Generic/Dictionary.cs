@@ -1115,12 +1115,12 @@ namespace System.Collections.Generic
             //
             // Be careful when modifying this, calculate_layout relies on the
             // overflow check here.
-            int adjusted_capacity;
+            uint adjusted_capacity;
             switch (capacity)
             {
                 // 0x01FFFFFF is the max value that would not overflow when *8
                 case <= 0x01FFFFFF:
-                    adjusted_capacity = (int)unchecked(capacity * 8 / 7);
+                    adjusted_capacity = unchecked(capacity * 8 / 7);
                     break;
                 // 0x37FFFFFF is the max value that smaller than 0x0400_0000 after *8/7
                 case <= 0x37FFFFFF:
@@ -1134,14 +1134,9 @@ namespace System.Collections.Generic
             // next_power_of_two (which can't overflow because of the previous divison).
             return nextPowerOfTwo(adjusted_capacity);
 
-            static int nextPowerOfTwo(int num)
+            static int nextPowerOfTwo(uint num)
             {
-                num |= num >> 1;
-                num |= num >> 2;
-                num |= num >> 4;
-                num |= num >> 8;
-                num |= num >> 16;
-                return num + 1;
+                return (int)(0x01u << (32 - BitOperations.LeadingZeroCount(num)));
             }
         }
 
@@ -1158,10 +1153,9 @@ namespace System.Collections.Generic
             else
             {
                 // For larger tables we reserve 12.5% of the slots as empty.
-                return (bucket_mask + 1) / 8 * 7;
+                return (bucket_mask + 1) >> 3 * 7; // bucket_mask / 8 * 7, but it will generate a bit more complex for int, maybe we should use uint?
             }
         }
-
 
         public struct Enumerator : IEnumerator<KeyValuePair<TKey, TValue>>, IDictionaryEnumerator
         {
